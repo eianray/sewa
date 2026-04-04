@@ -157,6 +157,40 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
     markUnsaved();
   }, [projectId]);
 
+  // M5: Import nodes from shapefile
+  const handleImportNodes = useCallback(async (importedNodes: NetworkNode[]) => {
+    if (!session) return;
+    const userId = session.user.id;
+    const inserts = importedNodes.map((n) => ({ ...n, user_id: userId }));
+    const { data, error } = await supabase.from("network_nodes").insert(inserts).select();
+    if (error) { console.error("[SEWA] handleImportNodes:", error.message); return; }
+    if (data) setNodes((prev) => [...prev, ...(data as NetworkNode[])]);
+    markUnsaved();
+  }, [session, supabase, projectId]);
+
+  // M5: Import pipes from shapefile — resolves node labels to IDs from current nodes
+  const handleImportPipes = useCallback(async (importedPipes: (NetworkPipe & { from_node_label?: string; to_node_label?: string })[]) => {
+    if (!session) return;
+    const userId = session.user.id;
+    const labelToId = new Map<string, string>();
+    nodes.forEach((n) => labelToId.set(n.label, n.id));
+    const skipped: string[] = [];
+    const inserts = importedPipes
+      .map((p) => {
+        const fromId = labelToId.get(p.from_node_label ?? "");
+        const toId = labelToId.get(p.to_node_label ?? "");
+        if (!fromId || !toId) { skipped.push(p.label); return null; }
+        return { ...p, user_id: userId, from_node_id: fromId, to_node_id: toId };
+      })
+      .filter(Boolean) as NetworkPipe[];
+    if (skipped.length) console.warn("[SEWA] handleImportPipes skipped:", skipped.join(", "));
+    if (!inserts.length) return;
+    const { data, error } = await supabase.from("network_pipes").insert(inserts).select();
+    if (error) { console.error("[SEWA] handleImportPipes:", error.message); return; }
+    if (data) setPipes((prev) => [...prev, ...(data as NetworkPipe[])]);
+    markUnsaved();
+  }, [session, supabase, projectId, nodes]);
+
   const handleUpdateNode = useCallback(async (id: string, updates: Partial<NetworkNode>) => {
     setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, ...updates } : n)));
     await supabase.from("network_nodes").update(updates).eq("id", id);
@@ -228,13 +262,17 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
         <ElementPalette
           drawMode={drawMode} nodeTypeToAdd={nodeTypeToAdd}
           layerVisibility={layerVisibility} basemap={basemap}
-          currentLabel={boundaryLabel}
+          boundaryLabel={boundaryLabel}
+          nodes={nodes}
           onDrawModeChange={(mode) => { setDrawMode(mode); if (mode !== "pipe") setPipeFirstNodeId(null); }}
           onNodeTypeToAdd={setNodeTypeToAdd}
           onLayerVisibilityChange={setLayerVisibility}
           onBasemapChange={setBasemap}
+          onImportNodes={handleImportNodes}
+          onImportPipes={handleImportPipes}
           onImportBoundary={handleImportBoundary}
           onClearBoundary={handleClearBoundary}
+          projectId={projectId}
         />
         <div className="flex-1 relative">
           <MapCanvas

@@ -448,6 +448,72 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
   }, [projectId]);
 
   // --------------------------------------------------------------------------
+  // M5: Shapefile import — Nodes (from ImportPanel)
+  // --------------------------------------------------------------------------
+  const handleImportNodes = useCallback(async (importedNodes: NetworkNode[]) => {
+    if (!session) return;
+    const userId = session.user.id;
+    const inserts = importedNodes.map((n) => ({ ...n, user_id: userId }));
+    const { data, error } = await supabase
+      .from("network_nodes")
+      .insert(inserts)
+      .select();
+    if (error) {
+      console.error("[SEWA] handleImportNodes error:", error.message);
+      return;
+    }
+    if (data) setNodes((prev) => [...prev, ...(data as NetworkNode[])]);
+    markUnsaved();
+  }, [session, supabase, projectId]);
+
+  // --------------------------------------------------------------------------
+  // M5: Shapefile import — Pipes (from ImportPanel)
+  //
+  // Pipes imported from shapefile reference nodes by label (from_node_label /
+  // to_node_label). We look up the current nodes array to resolve labels → IDs.
+  // Pipes referencing node labels not yet in the project are skipped with a warning.
+  // --------------------------------------------------------------------------
+  const handleImportPipes = useCallback(async (importedPipes: (NetworkPipe & {
+    from_node_label?: string;
+    to_node_label?: string;
+  })[]) => {
+    if (!session) return;
+    const userId = session.user.id;
+    // Build label → id lookup from current nodes
+    const labelToId = new Map<string, string>();
+    nodes.forEach((n) => labelToId.set(n.label, n.id));
+
+    const skipped: string[] = [];
+    const inserts = importedPipes
+      .map((p) => {
+        const fromId = labelToId.get(p.from_node_label ?? "");
+        const toId = labelToId.get(p.to_node_label ?? "");
+        if (!fromId || !toId) {
+          skipped.push(p.label);
+          return null;
+        }
+        return { ...p, user_id: userId, from_node_id: fromId, to_node_id: toId };
+      })
+      .filter(Boolean) as NetworkPipe[];
+
+    if (skipped.length > 0) {
+      console.warn(`[SEWA] handleImportPipes: skipped ${skipped.length} pipes with unresolved node labels:`, skipped.join(", "));
+    }
+    if (!inserts.length) return;
+
+    const { data, error } = await supabase
+      .from("network_pipes")
+      .insert(inserts)
+      .select();
+    if (error) {
+      console.error("[SEWA] handleImportPipes error:", error.message);
+      return;
+    }
+    if (data) setPipes((prev) => [...prev, ...(data as NetworkPipe[])]);
+    markUnsaved();
+  }, [session, supabase, projectId, nodes]);
+
+  // --------------------------------------------------------------------------
   // M3: Simulation runner
   // --------------------------------------------------------------------------
 
@@ -613,8 +679,8 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
           .select()
           .single();
         if (!error && data) setPipes((prev) => [...prev, data as NetworkPipe]);
-        setPipeFromNodeId(null);
-        setDrawMode("none");
+        // Stay in pipe mode so user can immediately start the next pipe.
+        // pipeFromNodeId is already null so the next click becomes the new FROM node.
         markUnsaved();
         return;
       }
@@ -918,13 +984,17 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
           nodeTypeToAdd={nodeTypeToAdd}
           layerVisibility={layerVisibility}
           basemap={basemap}
-          currentLabel={boundaryLabel}
+          boundaryLabel={boundaryLabel}
+          nodes={nodes}
           onDrawModeChange={setDrawMode}
           onNodeTypeToAdd={setNodeTypeToAdd}
           onLayerVisibilityChange={setLayerVisibility}
           onBasemapChange={setBasemap}
+          onImportNodes={handleImportNodes}
+          onImportPipes={handleImportPipes}
           onImportBoundary={handleImportBoundary}
           onClearBoundary={handleClearBoundary}
+          projectId={projectId}
         />
 
         {/* Map canvas (center) — switches between GIS and Schematic view */}

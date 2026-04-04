@@ -2,24 +2,28 @@
 
 import { DrawMode, NodeType, BasemapType, LayerVisibility } from "@/types/network";
 import { NODE_COLORS } from "@/types/network";
-import ImportButton from "@/components/ImportButton";
-import type { FeatureCollection } from "geojson";
+import ImportPanel from "@/components/ImportPanel";
+import type { FeatureCollection, Feature, GeoJsonProperties } from "geojson";
+import type { NetworkNode, NetworkPipe } from "@/types/network";
 
 interface ElementPaletteProps {
   drawMode: DrawMode;
   nodeTypeToAdd: NodeType | null;
   layerVisibility: LayerVisibility;
   basemap: BasemapType;
-  /** M4: Label of the currently loaded boundary, if any. */
-  currentLabel: string | null;
+  /** Label of the currently loaded boundary, if any. */
+  boundaryLabel: string | null;
+  /** All existing nodes for label→ID lookups during pipe imports. */
+  nodes: NetworkNode[];
   onDrawModeChange: (mode: DrawMode) => void;
   onNodeTypeToAdd: (type: NodeType | null) => void;
   onLayerVisibilityChange: (layers: LayerVisibility) => void;
   onBasemapChange: (basemap: BasemapType) => void;
-  /** M4: Called when a shapefile/GeoJSON is successfully parsed. */
+  onImportNodes: (nodes: NetworkNode[]) => void;
+  onImportPipes: (pipes: NetworkPipe[]) => void;
   onImportBoundary: (fc: FeatureCollection, label: string) => void;
-  /** M4: Called when the user clears the current boundary. */
   onClearBoundary: () => void;
+  projectId: string;
 }
 
 const NODE_TYPE_LABELS: Record<NodeType, string> = {
@@ -53,13 +57,17 @@ export default function ElementPalette({
   nodeTypeToAdd,
   layerVisibility,
   basemap,
-  currentLabel,
+  boundaryLabel,
+  nodes,
   onDrawModeChange,
   onNodeTypeToAdd,
   onLayerVisibilityChange,
   onBasemapChange,
+  onImportNodes,
+  onImportPipes,
   onImportBoundary,
   onClearBoundary,
+  projectId,
 }: ElementPaletteProps) {
   function handleNodeTypeClick(type: NodeType) {
     if (nodeTypeToAdd === type) {
@@ -206,15 +214,16 @@ export default function ElementPalette({
         </div>
       )}
 
-      {/* ── M4: Boundary Import ─────────────────────────────────────── */}
-      {/* Pinned to the bottom of the sidebar via mt-auto */}
-      <div className="mt-auto border-t border-[#1e293b] pt-4">
-        <ImportButton
-          currentLabel={currentLabel}
-          onImport={onImportBoundary}
-          onClear={onClearBoundary}
-        />
-      </div>
+      {/* ── Import Data (Nodes / Pipes / Basins) ────────────────────────── */}
+      <ImportPanel
+        projectId={projectId}
+        nodes={nodes}
+        onImportNodes={onImportNodes}
+        onImportPipes={onImportPipes}
+        onImportBoundary={onImportBoundary}
+        onClearBoundary={onClearBoundary}
+        boundaryLabel={boundaryLabel}
+      />
     </aside>
   );
 }

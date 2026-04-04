@@ -28,6 +28,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
+      {/* JSZip + shp.js for shapefile parsing in ImportPanel */}
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" />
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/shpjs/4.0.0/shp.js" />
     </html>
   );
 }
