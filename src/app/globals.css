@@ -24,3 +24,25 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Leaflet tooltip overrides */
+.leaflet-tooltip.sewa-tooltip {
+  background: #0d1526;
+  border: 1px solid #1e293b;
+  color: #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 4px 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.leaflet-tooltip.sewa-tooltip::before {
+  border-top-color: #1e293b;
+}
+.leaflet-control-attribution {
+  background: rgba(10,15,30,0.8) !important;
+  color: #475569 !important;
+  font-size: 10px !important;
+}
+.leaflet-control-attribution a {
+  color: #38bdf8 !important;
+}

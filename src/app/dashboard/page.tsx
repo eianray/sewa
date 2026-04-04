@@ -207,7 +207,7 @@ export default function Dashboard() {
                   <span className="text-xs text-[#475569]">{formatDate(project.created_at)}</span>
                   <button
                     onClick={() => {
-                      /* TODO: open project */
+                      window.location.href = `/project?id=${project.id}`;
                     }}
                     className="text-sm text-[#38bdf8] hover:text-[#0ea5e9] font-medium transition-colors"
                   >
