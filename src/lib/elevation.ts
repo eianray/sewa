@@ -4,11 +4,12 @@
  */
 export async function fetchPointElevation(lat: number, lng: number): Promise<number | null> {
   try {
-    const url = `https://epqs.nationalmap.gov/v3/json?x=${lng}&y=${lat}&wkid=4326&units=Feet&includeDate=false`;
+    const url = `https://epqs.nationalmap.gov/v1/json?x=${lng}&y=${lat}&wkid=4326&units=Feet&includeDate=false`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const json = await res.json();
-    const value = json?.data?.value;
+    // v1 response: { value: number, location: {...}, ... }
+    const value = json?.value;
     if (value === undefined || value === null) return null;
     return parseFloat(String(value));
   } catch {
