@@ -6,9 +6,12 @@ import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase";
 import type { Project } from "@/types/project";
 import type { NetworkNode, NetworkPipe, NodeType, DrawMode, BasemapType, LayerVisibility } from "@/types/network";
+import type { SimulationResult } from "@/lib/simulation";
 import { loadDemTile } from "@/lib/demSampler";
 import { DEFAULT_BURIAL_DEPTH_FT } from "@/lib/lidarElevation";
+import { runSimulation } from "@/lib/simulation";
 import ElementPalette from "@/components/ElementPalette";
+import SimulationPanel from "@/components/SimulationPanel";
 import PropertiesPanel from "@/components/PropertiesPanel";
 import type L from "leaflet";
 import type { FeatureCollection } from "geojson";
@@ -63,6 +66,9 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
   const [boundaryGeoJSON, setBoundaryGeoJSON] = useState<FeatureCollection | null>(null);
   const [boundaryLabel, setBoundaryLabel] = useState<string | null>(null);
   const [demTile, setDemTile] = useState<string | null>(null);
+  const [simulationResult, setSimulationResult] = useState<SimulationResult | null>(null);
+  const [simulationLoading, setSimulationLoading] = useState(false);
+  const [showSimulation, setShowSimulation] = useState(false);
   const [grabbingLidar, setGrabbingLidar] = useState(false);
 
 
@@ -275,6 +281,18 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
     await handleUpdatePipe(pipeId, { slope_pct: +slope.toFixed(3) });
   }, [pipes, nodes, handleUpdatePipe]);
 
+  // Run Manning's steady-state sewer analysis
+  const handleRunSimulation = useCallback(() => {
+    setSimulationLoading(true);
+    setShowSimulation(true);
+    try {
+      const result = runSimulation(nodes, pipes);
+      setSimulationResult(result);
+    } finally {
+      setSimulationLoading(false);
+    }
+  }, [nodes, pipes]);
+
   const selectedElement = selectedType === "node"
     ? nodes.find((n) => n.id === selectedId) ?? null
     : pipes.find((p) => p.id === selectedId) ?? null;
@@ -299,6 +317,14 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
           <span className="text-sm text-white font-medium">{project?.name ?? "Project"}</span>
         </div>
         <div className="flex items-center gap-3">
+          {/* Run Analysis — always visible in header */}
+          <button
+            onClick={handleRunSimulation}
+            disabled={simulationLoading || nodes.length === 0}
+            className="bg-[#38bdf8] hover:bg-[#0ea5e9] disabled:opacity-40 disabled:cursor-not-allowed text-[#0a0f1e] text-xs font-semibold rounded-lg px-4 py-1.5 transition-colors"
+          >
+            {simulationLoading ? "Running…" : "Run Analysis"}
+          </button>
           <div className="flex items-center gap-1.5 text-xs">
             {saved ? (
               <><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#22c55e" strokeWidth="2"><polyline points="2,7 5.5,10.5 12,3.5" /></svg><span className="text-[#22c55e]">Saved</span></>
@@ -313,6 +339,14 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
           </div>
         </div>
       </header>
+
+      {/* Simulation results — shown when user clicks Run Analysis */}
+      <SimulationPanel
+        result={simulationResult}
+        loading={simulationLoading}
+        show={showSimulation}
+        onClose={() => setShowSimulation(false)}
+      />
 
       {/* Body */}
       <div className="flex flex-1 overflow-hidden">
@@ -353,7 +387,7 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
           selected={selectedElement as NetworkNode | NetworkPipe | null}
           selectedType={selectedType}
           nodes={nodes}
-          demTile={demTile ?? undefined}
+          boundaryGeoJSON={boundaryGeoJSON}
           onUpdateNode={handleUpdateNode}
           onUpdatePipe={handleUpdatePipe}
           onDeleteNode={handleDeleteNode}

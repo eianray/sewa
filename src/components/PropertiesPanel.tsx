@@ -6,7 +6,8 @@ interface PropertiesPanelProps {
   selected: NetworkNode | NetworkPipe | null;
   selectedType: "node" | "pipe" | null;
   nodes: NetworkNode[];
-  demTile?: string;
+  /** GeoJSON FeatureCollection — required for Grab LIDAR to work */
+  boundaryGeoJSON?: object | null;
   onUpdateNode: (id: string, updates: Partial<NetworkNode>) => void;
   onUpdatePipe: (id: string, updates: Partial<NetworkPipe>) => void;
   onDeleteNode: (id: string) => void;
@@ -33,7 +34,7 @@ export default function PropertiesPanel({
   selected,
   selectedType,
   nodes,
-  demTile,
+  boundaryGeoJSON,
   onUpdateNode,
   onUpdatePipe,
   onDeleteNode,
@@ -161,11 +162,12 @@ export default function PropertiesPanel({
                   })
                 }
               />
-              {onGrabLidar && demTile && (
+              {onGrabLidar && (
                 <button
                   onClick={() => onGrabLidar(node.id, node.lat, node.lng)}
                   disabled={grabbingLidar}
-                  className="mt-1 w-full rounded text-xs px-3 py-1.5 bg-[#111827] border border-[#1e293b] text-[#94a3b8] hover:border-[#38bdf8]/50 hover:text-[#38bdf8] transition-colors"
+                  title={!boundaryGeoJSON ? "Import a boundary polygon first" : undefined}
+                  className="mt-1 w-full rounded text-xs px-3 py-1.5 bg-[#111827] border border-[#1e293b] text-[#94a3b8] hover:border-[#38bdf8]/50 hover:text-[#38bdf8] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   {grabbingLidar ? "Sampling LIDAR…" : "Grab Elevation from LIDAR"}
                 </button>
