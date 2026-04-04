@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase";
+import { fetchPointElevation } from "@/lib/elevation";
+import { checkMeridianHealth } from "@/lib/meridian";
 import type { Project } from "@/types/project";
 import type { NetworkNode, NetworkPipe, NodeType, DrawMode, BasemapType, LayerVisibility } from "@/types/network";
 import ElementPalette from "@/components/ElementPalette";
@@ -34,8 +36,14 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<"node" | "pipe" | null>(null);
   const [pipeFirstNodeId, setPipeFirstNodeId] = useState<string | null>(null);
+  const [meridianStatus, setMeridianStatus] = useState<"ok" | "offline" | "checking">("checking");
+  const [fetchingElevationNodeId, setFetchingElevationNodeId] = useState<string | null>(null);
 
   const mapRef = useRef<L.Map | null>(null);
+
+  useEffect(() => {
+    checkMeridianHealth().then((ok) => setMeridianStatus(ok ? "ok" : "offline"));
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -48,6 +56,17 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
+
+  async function fetchAndApplyElevation(nodeId: string, lat: number, lng: number) {
+    setFetchingElevationNodeId(nodeId);
+    const elev = await fetchPointElevation(lat, lng);
+    if (elev !== null) {
+      const invert = elev - 4.0;
+      await supabase.from("network_nodes").update({ rim_elev: elev, invert_elev: invert }).eq("id", nodeId);
+      setNodes((prev) => prev.map((n) => (n.id === nodeId ? { ...n, rim_elev: elev, invert_elev: invert } : n)));
+    }
+    setFetchingElevationNodeId(null);
+  }
 
   async function fetchData(userId: string) {
     setLoading(true);
@@ -77,7 +96,11 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
         .insert({ project_id: projectId, user_id: session.user.id, type: nodeTypeToAdd, lat, lng, label: "" })
         .select()
         .single();
-      if (!error && data) setNodes((prev) => [...prev, data as NetworkNode]);
+      if (!error && data) {
+        const newNode = data as NetworkNode;
+        setNodes((prev) => [...prev, newNode]);
+        fetchAndApplyElevation(newNode.id, lat, lng);
+      }
       markUnsaved();
     },
     [session, drawMode, nodeTypeToAdd, projectId]
@@ -162,6 +185,14 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
           <span className="text-sm text-white font-medium">{project?.name ?? "Project"}</span>
         </div>
         <div className="flex items-center gap-3">
+          {meridianStatus !== "checking" && (
+            <div className="flex items-center gap-1.5 text-xs">
+              <div className={`w-2 h-2 rounded-full ${meridianStatus === "ok" ? "bg-[#22c55e]" : "bg-red-500"}`} />
+              <span className={meridianStatus === "ok" ? "text-[#22c55e]" : "text-red-400"}>
+                {meridianStatus === "ok" ? "Meridian ✓" : "Meridian offline"}
+              </span>
+            </div>
+          )}
           <div className="flex items-center gap-1.5 text-xs">
             {saved ? (
               <><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#22c55e" strokeWidth="2"><polyline points="2,7 5.5,10.5 12,3.5" /></svg><span className="text-[#22c55e]">Saved</span></>
