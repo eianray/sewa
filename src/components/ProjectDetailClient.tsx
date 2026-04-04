@@ -268,7 +268,8 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
     ]);
 
     if (proj) setProject(proj as Project);
-    setNodes((nodeData as NetworkNode[]) || []);
+    const loadedNodes = (nodeData as NetworkNode[]) || [];
+    setNodes(loadedNodes);
     setPipes((pipeData as NetworkPipe[]) || []);
 
     // M4: Load saved boundary from the project row
@@ -281,6 +282,27 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
     }
 
     setLoading(false);
+
+    // Auto-center the map on the project's existing data.
+    // Wait one tick for the map to mount, then fly to content.
+    setTimeout(() => {
+      const map = mapRef.current;
+      if (!map) return;
+      if (loadedNodes.length > 0) {
+        // Compute centroid of all nodes and fly there at a reasonable zoom.
+        const avgLat = loadedNodes.reduce((s, n) => s + n.lat, 0) / loadedNodes.length;
+        const avgLng = loadedNodes.reduce((s, n) => s + n.lng, 0) / loadedNodes.length;
+        map.setView([avgLat, avgLng], 14);
+      } else if (projRecord?.boundary_geojson) {
+        // No nodes yet but boundary exists — fit to it.
+        // Import Leaflet dynamically since this runs in a browser-only context.
+        try {
+          const Leaflet = (await import("leaflet")).default;
+          const layer = Leaflet.geoJSON(projRecord.boundary_geojson as FeatureCollection);
+          map.fitBounds(layer.getBounds(), { padding: [40, 40] });
+        } catch { /* ignore malformed geojson */ }
+      }
+    }, 100);
   }
 
   // -------------------------------------------------------------------------
@@ -509,8 +531,6 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
    */
   const handleMapClick = useCallback(
     async (lat: number, lng: number) => {
-      // Debug: log every click so we can see if the handler fires and what state it sees
-      console.log("[SEWA] handleMapClick", { lat, lng, drawMode, nodeTypeToAdd, hasSession: !!session });
       // In pipe mode, map-canvas clicks are ignored — user must click node markers.
       if (!session || drawMode === "pipe") return;
       if (drawMode !== "node" || !nodeTypeToAdd) return;

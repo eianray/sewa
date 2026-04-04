@@ -104,12 +104,17 @@ export default function MapCanvas({
 
 
   // Mutable refs so Leaflet event handlers always call the latest callbacks
+  // and always see the latest state without stale closures.
   const onMapClickRef = useRef(onMapClick);
   const onNodeClickRef = useRef(onNodeClick);
   const onPipeClickRef = useRef(onPipeClick);
+  const drawModeRef = useRef(drawMode);
+  const nodesRef = useRef(nodes);
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
   useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
   useEffect(() => { onPipeClickRef.current = onPipeClick; }, [onPipeClick]);
+  useEffect(() => { drawModeRef.current = drawMode; }, [drawMode]);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
 
   // Initialize map
   useEffect(() => {
@@ -129,10 +134,27 @@ export default function MapCanvas({
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
 
-    // Map click → place node (node mode only).
-    // Use ref so the handler always calls the CURRENT onMapClick (which closes
-    // over the current drawMode) rather than the stale one captured at mount.
+    // Map click → place node (node mode) or snap-to-nearest-node (pipe mode).
+    // Use ref so the handler always calls the CURRENT callback rather than stale captures.
     map.on("click", (e: L.LeafletMouseEvent) => {
+      const mode = drawModeRef.current;
+      if (mode === "pipe") {
+        // In pipe mode, clicking the MAP snaps to the nearest node marker within 40px.
+        // This lets users click near a node without hitting the exact 16px icon.
+        const clickPt = map.latLngToLayerPoint(e.latlng);
+        let nearest: NetworkNode | null = null;
+        let nearestDist = Infinity;
+        nodesRef.current.forEach((node) => {
+          const nodePt = map.latLngToLayerPoint(L.latLng(node.lat, node.lng));
+          const dist = clickPt.distanceTo(nodePt);
+          if (dist < nearestDist) { nearestDist = dist; nearest = node; }
+        });
+        // 40px snap radius — generous enough to click near but not anywhere
+        if (nearest && nearestDist <= 40) {
+          onNodeClickRef.current(nearest, e);
+        }
+        return;
+      }
       onMapClickRef.current(e.latlng.lat, e.latlng.lng);
     });
 
@@ -146,16 +168,20 @@ export default function MapCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Crosshair cursor + disable map pan in pipe-draw mode so node clicks register cleanly.
+  // Crosshair cursor in node or pipe draw mode; disable map pan in pipe mode
+  // (pan stays enabled in node mode so user can pan & click without fighting the map).
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const container = map.getContainer();
-    if (drawMode === "pipe") {
+    if (drawMode === "pipe" || drawMode === "node") {
       container.classList.add("leaflet-crosshair");
-      map.dragging.disable();
     } else {
       container.classList.remove("leaflet-crosshair");
+    }
+    if (drawMode === "pipe") {
+      map.dragging.disable();
+    } else {
       map.dragging.enable();
     }
   }, [drawMode]);
