@@ -12,12 +12,21 @@ export default function Home() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session?.user?.email ?? null);
+      if (data.session) {
+        // Already logged in — redirect to dashboard
+        window.location.href = "/dashboard";
+        return;
+      }
+      setSession(null);
     });
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session?.user?.email ?? null);
+      if (session) {
+        window.location.href = "/dashboard";
+      } else {
+        setSession(null);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -33,53 +42,12 @@ export default function Home() {
     if (error) {
       setMessage(`Error: ${error.message}`);
     } else {
-      setMessage("Signed in! Redirecting...");
-      window.location.href = "/";
+      window.location.href = "/dashboard";
     }
     setLoading(false);
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
-
-  if (session) {
-    return (
-      <div className="min-h-screen bg-[#0a0f1e] text-white flex flex-col">
-        {/* Top bar */}
-        <header className="flex items-center justify-between px-6 py-4 border-b border-[#1e293b]">
-          <div className="flex items-center gap-3">
-            <span className="text-[#38bdf8] font-bold text-lg">SEWA</span>
-            <span className="text-[#475569] text-sm">Sewer &amp; Water Analysis</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-[#94a3b8]">{session}</span>
-            <button
-              onClick={handleLogout}
-              className="text-sm text-[#94a3b8] hover:text-white transition-colors"
-            >
-              Sign out
-            </button>
-          </div>
-        </header>
-
-        {/* Main content */}
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-[#38bdf8] mb-2">
-              Welcome to SEWA
-            </h1>
-            <p className="text-[#94a3b8]">
-              Authenticated as {session}
-            </p>
-            <p className="text-[#475569] text-sm mt-4">
-              Phase A — shell complete. Phase B is next.
-            </p>
-          </div>
-        </main>
-      </div>
-    );
-  }
+  if (session) return null; // Redirecting
 
   return (
     <div className="min-h-screen bg-[#0a0f1e] text-white flex flex-col">
@@ -97,7 +65,7 @@ export default function Home() {
           <div className="text-center">
             <h1 className="text-xl font-bold text-white">Sign in to SEWA</h1>
             <p className="text-[#94a3b8] text-sm mt-1">
-              Enter your email to receive a magic link
+              Enter your credentials to access your account
             </p>
           </div>
 
@@ -129,7 +97,7 @@ export default function Home() {
           </form>
 
           {message && (
-            <p className="text-center text-sm text-[#f87171]">{message}</p>
+            <p className="text-center text-sm text-red-400">{message}</p>
           )}
         </div>
       </main>
