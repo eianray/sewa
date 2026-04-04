@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useMemo } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet-draw";
+import "leaflet-draw/dist/leaflet.draw.css";
 import type { FeatureCollection } from "geojson";
 import type { NetworkNode, NetworkPipe, NodeType, DrawMode, BasemapType, LayerVisibility } from "@/types/network";
 import { NODE_COLORS } from "@/types/network";
@@ -19,48 +21,39 @@ interface MapCanvasProps {
   /** M4: GeoJSON FeatureCollection to render as the project boundary polygon. */
   boundaryGeoJSON?: FeatureCollection | null;
   onMapClick: (lat: number, lng: number) => void;
+  /** Called when leaflet-draw completes a polyline (pipe-draw mode). */
+  onPolylineDrawn?: (latlngs: L.LatLng[]) => void;
   onNodeClick: (node: NetworkNode, e: L.LeafletMouseEvent) => void;
   onPipeClick: (pipe: NetworkPipe, e: L.LeafletMouseEvent) => void;
   onMapReady?: (map: L.Map) => void;
 }
 
 const BASEMAP_TILES: Record<BasemapType, string> = {
-  // OpenStreetMap
   street: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  // Esri World Imagery (satellite)
   satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  // OpenTopoMap (community topo)
   topo: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
-  // Esri World Topo Map
   esri_topo: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
-  // Esri World Terrain Base
   esri_terrain: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}",
-  // Esri National Geographic
   esri_natgeo: "https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}",
-  // Esri World Street Map
   esri_street: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
-  // USGS National Map — Imagery
   usgs_imagery: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
-  // USGS National Map — Topo (The National Map)
   usgs_topo: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",
-  // Stamen Terrain (via Stadia)
   stamen_terrain: "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.jpg",
-  // Stamen Watercolor (artistic — fun for demos)
   stamen_watercolor: "https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg",
 };
 
 const BASEMAP_ATTRIBUTION: Record<BasemapType, string> = {
   street: "© OpenStreetMap contributors",
-  satellite: "Tiles © Esri — Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), MapmyIndia, © OpenStreetMap contributors",
+  satellite: "Tiles © Esri",
   topo: "© OpenTopoMap (CC-BY-SA)",
-  esri_topo: "Tiles © Esri — Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), swisstopo, Mapmyindia, © OpenStreetMap contributors",
+  esri_topo: "Tiles © Esri",
   esri_terrain: "Tiles © Esri — USGS, NPS",
-  esri_natgeo: "Tiles © Esri — National Geographic, Esri, DeLorme, HERE, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, iPC",
-  esri_street: "Tiles © Esri — Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012",
-  usgs_imagery: "Tiles courtesy of the U.S. Geological Survey",
-  usgs_topo: "Tiles courtesy of the U.S. Geological Survey",
-  stamen_terrain: "Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL.",
-  stamen_watercolor: "Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under CC BY SA.",
+  esri_natgeo: "Tiles © Esri",
+  esri_street: "Tiles © Esri",
+  usgs_imagery: "Tiles © U.S. Geological Survey",
+  usgs_topo: "Tiles © U.S. Geological Survey",
+  stamen_terrain: "Map tiles by Stamen Design (CC BY 3.0). Data by OpenStreetMap (ODbL).",
+  stamen_watercolor: "Map tiles by Stamen Design (CC BY 3.0). Data by OpenStreetMap (CC BY SA).",
 };
 
 // Fix default marker icon
@@ -77,14 +70,7 @@ function createNodeIcon(type: NodeType, isSelected: boolean): L.DivIcon {
   const border = isSelected ? "3px solid white" : "2px solid rgba(255,255,255,0.6)";
   return L.divIcon({
     className: "",
-    html: `<div style="
-      width:${size}px;height:${size}px;
-      background:${color};
-      border:${border};
-      border-radius:50%;
-      box-shadow:0 0 6px rgba(0,0,0,0.5);
-      cursor:pointer;
-    "></div>`,
+    html: `<div style="width:${size}px;height:${size}px;background:${color};border:${border};border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,0.5);cursor:pointer;"></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -101,6 +87,7 @@ export default function MapCanvas({
   basemap,
   boundaryGeoJSON,
   onMapClick,
+  onPolylineDrawn,
   onNodeClick,
   onPipeClick,
   onMapReady,
@@ -109,17 +96,18 @@ export default function MapCanvas({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const nodeMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const pipeLinesRef = useRef<Map<string, L.Polyline>>(new Map());
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const boundaryLayerRef = useRef<L.GeoJSON | null>(null);
+  /** leaflet-draw polyline tool for pipe drawing */
+  const drawPolylineRef = useRef<L.Draw.Polyline | null>(null);
 
-  // Keep mutable refs to the latest callbacks so marker closures never go stale.
-  // Leaflet markers are created once; without this, their click handlers
-  // would capture the initial (stale) callback from the first render.
+  // Mutable refs so Leaflet event handlers always call the latest callbacks
   const onNodeClickRef = useRef(onNodeClick);
   const onPipeClickRef = useRef(onPipeClick);
+  const onPolylineDrawnRef = useRef(onPolylineDrawn);
   useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
   useEffect(() => { onPipeClickRef.current = onPipeClick; }, [onPipeClick]);
-  const tileLayerRef = useRef<L.TileLayer | null>(null);
-  /** M4: Ref to the Leaflet GeoJSON layer showing the project boundary polygon. */
-  const boundaryLayerRef = useRef<L.GeoJSON | null>(null);
+  useEffect(() => { onPolylineDrawnRef.current = onPolylineDrawn; }, [onPolylineDrawn]);
 
   // Initialize map
   useEffect(() => {
@@ -139,11 +127,31 @@ export default function MapCanvas({
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
 
-    // Keep a ref for onMapClick too, so the map-level click handler
-    // always calls the current version (drawMode changes over time).
-    const onMapClickRef = { current: onMapClick };
+    // Set up leaflet-draw polyline tool for pipe drawing.
+    // L.Draw.Polyline handles cursor, drag-disable, rubber-band preview,
+    // and click capture automatically — just like PMI Workflow Builder.
+    const drawPolyline = new L.Draw.Polyline(map, {
+      shapeOptions: {
+        color: "#38bdf8",
+        weight: 3,
+        opacity: 0.9,
+        smoothFactor: 1.2,
+      },
+      allowIntersection: false,
+      drawError: { color: "#f87171", timeout: 1000 },
+    });
+    drawPolylineRef.current = drawPolyline;
+
+    // Fire custom event when a polyline (pipe) is completed
+    map.on("draw:created" as string, (e: L.LeafletEvent) => {
+      const event = e as L.DrawEvents.Created;
+      const latlngs = event.layer.getLatLngs() as L.LatLng[];
+      onPolylineDrawnRef.current?.(latlngs);
+    });
+
+    // Map click → place node (node mode only)
     map.on("click", (e: L.LeafletMouseEvent) => {
-      onMapClickRef.current(e.latlng.lat, e.latlng.lng);
+      onMapClick(e.latlng.lat, e.latlng.lng);
     });
 
     mapRef.current = map;
@@ -156,22 +164,19 @@ export default function MapCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update cursor based on draw mode.
-  // Must target the .leaflet-container element directly — Leaflet sets its own
-  // cursor styles on that element and will override anything on the wrapper div.
+  // Enable / disable leaflet-draw polyline tool when drawMode changes.
+  // This is what actually switches the cursor and disables map dragging,
+  // exactly like PMI Workflow Builder's L.Draw.Polygon approach.
   useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    const container = map.getContainer() as HTMLElement;
-    if (drawMode === "node" || drawMode === "pipe") {
-      container.style.cursor = "crosshair";
-      // Also disable map dragging so clicks reliably land on markers
-      map.dragging.disable();
+    const drawPolyline = drawPolylineRef.current;
+    if (!drawPolyline) return;
+
+    if (drawMode === "pipe") {
+      drawPolyline.enable();
     } else {
-      container.style.cursor = "";
-      map.dragging.enable();
+      drawPolyline.disable();
     }
-  }, [drawMode, nodeTypeToAdd]);
+  }, [drawMode]);
 
   // Switch basemap
   useEffect(() => {
@@ -193,7 +198,6 @@ export default function MapCanvas({
 
     const currentIds = new Set(nodes.map((n) => n.id));
 
-    // Remove old markers
     nodeMarkersRef.current.forEach((marker, id) => {
       if (!currentIds.has(id)) {
         marker.remove();
@@ -201,7 +205,6 @@ export default function MapCanvas({
       }
     });
 
-    // Add/update markers
     nodes.forEach((node) => {
       const isSelected = selectedType === "node" && selectedId === node.id;
       const icon = createNodeIcon(node.type, isSelected);
@@ -224,14 +227,12 @@ export default function MapCanvas({
           });
         marker.on("click", (e: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(e);
-          // Use the ref so this handler always calls the current callback,
-          // even after drawMode has changed since the marker was created.
           onNodeClickRef.current(node, e);
         });
         nodeMarkersRef.current.set(node.id, marker);
       }
     });
-  }, [nodes, selectedId, selectedType, layerVisibility.labels, onNodeClick]);
+  }, [nodes, selectedId, selectedType, layerVisibility.labels]);
 
   // Render pipes
   useEffect(() => {
@@ -240,7 +241,6 @@ export default function MapCanvas({
 
     const currentPipeIds = new Set(pipes.map((p) => p.id));
 
-    // Remove old lines
     pipeLinesRef.current.forEach((line, id) => {
       if (!currentPipeIds.has(id)) {
         line.remove();
@@ -248,14 +248,11 @@ export default function MapCanvas({
       }
     });
 
-    // Node lookup
     const nodeMap = new Map(nodes.map((n) => [n.id, n]));
 
-    // Add/update lines
     pipes.forEach((pipe) => {
       const fromNode = pipe.from_node_id ? nodeMap.get(pipe.from_node_id) : null;
       const toNode = pipe.to_node_id ? nodeMap.get(pipe.to_node_id) : null;
-
       if (!fromNode || !toNode) return;
 
       const isSelected = selectedType === "pipe" && selectedId === pipe.id;
@@ -297,9 +294,6 @@ export default function MapCanvas({
         marker.remove();
       }
     });
-  }, [layerVisibility.nodes]);
-
-  useEffect(() => {
     pipeLinesRef.current.forEach((line) => {
       if (layerVisibility.pipes) {
         if (!line.getElement()?.parentNode) line.addTo(mapRef.current!);
@@ -307,54 +301,45 @@ export default function MapCanvas({
         line.remove();
       }
     });
-  }, [layerVisibility.pipes]);
+  }, [layerVisibility]);
 
-  // --------------------------------------------------------------------
-  // M4: Render project boundary GeoJSON as a polygon overlay on the map.
-  //
-  // When boundaryGeoJSON prop changes:
-  //   1. Remove the previous L.GeoJSON layer if one exists
-  //   2. Add a new L.GeoJSON layer with sky-blue styling (see style options)
-  //   3. Auto-fit the Leaflet map to the layer's bounding box with 40px
-  //      padding so the boundary has breathing room on all sides
-  // --------------------------------------------------------------------
+  // Render boundary polygon
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    // Remove stale layer
     if (boundaryLayerRef.current) {
       boundaryLayerRef.current.remove();
       boundaryLayerRef.current = null;
     }
+    if (boundaryGeoJSON) {
+      const layer = L.geoJSON(boundaryGeoJSON, {
+        style: {
+          color: "#a78bfa",
+          weight: 2,
+          fillOpacity: 0.06,
+          dashArray: "6 4",
+        },
+      }).addTo(map);
+      boundaryLayerRef.current = layer;
+    }
+  }, [boundaryGeoJSON]);
 
-    // Nothing to render — just clear
-    if (!boundaryGeoJSON || boundaryGeoJSON.features.length === 0) return;
-
-    // Style: sky-blue stroke, transparent fill so nodes/pipes remain visible
-    const BOUNDARY_STYLE: L.GeoJSONOptions = {
-      style: {
-        color: "#38bdf8",
-        weight: 2,
-        fillOpacity: 0.05,
-      },
-    };
-
-    const layer = L.geoJSON(boundaryGeoJSON, BOUNDARY_STYLE).addTo(map);
-    boundaryLayerRef.current = layer;
-
-    // Auto-fit map bounds to the boundary polygon with breathing room
-    const bounds = layer.getBounds();
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [40, 40] });
+  // Auto-fit map to boundary when it first appears
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !boundaryGeoJSON) return;
+    const layer = boundaryLayerRef.current;
+    if (layer) {
+      map.fitBounds(layer.getBounds(), { padding: [40, 40] });
     }
   }, [boundaryGeoJSON]);
 
   return (
     <div
       ref={mapContainerRef}
-      className="w-full h-full"
-      style={{ background: "#0a0f1e" }}
+      className="flex-1 relative"
+      style={{ background: "#0d1526" }}
     />
   );
 }

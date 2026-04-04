@@ -138,12 +138,9 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
    */
   const [selectedType, setSelectedType] = useState<"node" | "pipe" | null>(null);
 
-  /**
-   * During pipe-draw mode (drawMode === "pipe"), this holds the ID of the
-   * first node clicked by the user. When the user clicks a second distinct
-   * node, a new pipe is created between the two.
-   */
-  const [pipeFirstNodeId, setPipeFirstNodeId] = useState<string | null>(null);
+  // pipeFirstNodeId — REMOVED. Pipe drawing is now handled by leaflet-draw
+  // via the onPolylineDrawn callback (L.Draw.Polyline handles cursor, drag, and
+  // rubber-band preview automatically — same approach as PMI Workflow Builder).
 
   // -------------------------------------------------------------------------
   // M2: Meridian health indicator
@@ -547,55 +544,85 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
 
   /**
    * Handles clicks on individual node markers in the Leaflet map.
-   *
-   * Drawing mode ("pipe"):
-   *   - First click: stores the node as `pipeFirstNodeId` (upstream end)
-   *   - Second click (different node): creates a new pipe between the two nodes
-   *     with default diameter (8 in) and material (PVC), then exits draw mode
-   *
-   * Selection mode (default):
-   *   - Sets selectedId / selectedType to open the PropertiesPanel
+   * In pipe-draw mode the user draws with L.Draw.Polyline (handlePolylineDrawn);
+   * in node mode we place a new node; in default mode we select the node.
    *
    * @param node  - The NetworkNode that was clicked
    * @param _e    - The Leaflet mouse event (underscore-prefixed: intentionally unused)
    */
+  /**
+   * leaflet-draw completed a polyline — create pipes between each consecutive
+   * pair of latlngs. Fires when the user finishes drawing a pipe in pipe mode
+   * (L.Draw.Polyline, same approach as PMI Workflow Builder).
+   */
+  const handlePolylineDrawn = useCallback(
+    async (latlngs: L.LatLng[]) => {
+      if (!session || latlngs.length < 2) return;
+      // For each pair of consecutive points, find the nearest existing nodes and
+      // create a pipe between them. If no nearby node exists, skip that segment.
+      const snaps: Array<{ from: NetworkNode; to: NetworkNode }> = [];
+      for (let i = 0; i < latlngs.length - 1; i++) {
+        const a = latlngs[i];
+        const b = latlngs[i + 1];
+        // Find nearest node to point A and point B
+        let fromNode: NetworkNode | null = null;
+        let toNode: NetworkNode | null = null;
+        let minDistA = Infinity;
+        let minDistB = Infinity;
+        for (const n of nodes) {
+          const dA = Math.hypot(n.lat - a.lat, n.lng - a.lng);
+          const dB = Math.hypot(n.lat - b.lat, n.lng - b.lng);
+          if (dA < minDistA) { minDistA = dA; fromNode = n; }
+          if (dB < minDistB) { minDistB = dB; toNode = n; }
+        }
+        if (fromNode && toNode && fromNode.id !== toNode.id) {
+          snaps.push({ from: fromNode, to: toNode });
+        }
+      }
+
+      if (snaps.length === 0) {
+        setDrawMode("none");
+        return;
+      }
+
+      // Batch insert all pipes
+      const inserts = snaps.map(({ from, to }) => ({
+        project_id: projectId,
+        user_id: session.user.id,
+        from_node_id: from.id,
+        to_node_id: to.id,
+        diameter_in: 8,
+        material: "PVC" as const,
+      }));
+
+      const { data, error } = await supabase
+        .from("network_pipes")
+        .insert(inserts)
+        .select();
+
+      if (!error && data) {
+        setPipes((prev) => [...prev, ...(data as NetworkPipe[])]);
+      }
+
+      setDrawMode("none");
+      markUnsaved();
+    },
+    [session, projectId, nodes]
+  );
+
+  /**
+   * Handles clicks on individual node markers in the Leaflet map.
+   * In pipe-draw mode the user draws with L.Draw.Polyline (handlePolylineDrawn);
+   * in node mode we place a new node; in default mode we select the node.
+   */
   const handleNodeClick = useCallback(
     async (node: NetworkNode, _e: L.LeafletMouseEvent) => {
-      if (drawMode === "pipe") {
-        if (!pipeFirstNodeId) {
-          // First node of the new pipe — store it and wait for second click
-          setPipeFirstNodeId(node.id);
-        } else if (pipeFirstNodeId !== node.id && session) {
-          // Second node — create the pipe and reset draw mode
-          const { data, error } = await supabase
-            .from("network_pipes")
-            .insert({
-              project_id: projectId,
-              user_id: session.user.id,
-              from_node_id: pipeFirstNodeId,
-              to_node_id: node.id,
-              diameter_in: 8,
-              material: "PVC",
-            })
-            .select()
-            .single();
-
-          if (!error && data) {
-            setPipes((prev) => [...prev, data as NetworkPipe]);
-          }
-
-          // Reset pipe-draw state and exit draw mode
-          setPipeFirstNodeId(null);
-          setDrawMode("none");
-          markUnsaved();
-        }
-      } else {
-        // Default behaviour: select the node
-        setSelectedId(node.id);
-        setSelectedType("node");
-      }
+      if (drawMode === "node") return; // handled by handleMapClick
+      // Default: select
+      setSelectedId(node.id);
+      setSelectedType("node");
     },
-    [drawMode, pipeFirstNodeId, session, projectId]
+    [drawMode]
   );
 
   /**
@@ -891,11 +918,7 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
           layerVisibility={layerVisibility}
           basemap={basemap}
           currentLabel={boundaryLabel}
-          onDrawModeChange={(mode) => {
-            setDrawMode(mode);
-            // Clear any in-progress pipe-draw if the user exits pipe mode
-            if (mode !== "pipe") setPipeFirstNodeId(null);
-          }}
+          onDrawModeChange={setDrawMode}
           onNodeTypeToAdd={setNodeTypeToAdd}
           onLayerVisibilityChange={setLayerVisibility}
           onBasemapChange={setBasemap}
@@ -934,6 +957,7 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
             basemap={basemap}
             boundaryGeoJSON={boundaryGeoJSON}
             onMapClick={handleMapClick}
+            onPolylineDrawn={handlePolylineDrawn}
             onNodeClick={handleNodeClick}
             onPipeClick={handlePipeClick}
             onMapReady={(map) => {
@@ -943,19 +967,6 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
           />
           )}
 
-          {/* Floating prompt shown during pipe-draw mode after the first node is clicked */}
-          {drawMode === "pipe" && pipeFirstNodeId && (
-            <div
-              className="absolute top-3 left-1/2 -translate-x-1/2 text-xs font-semibold rounded-full px-4 py-1.5 shadow-lg z-[1000]"
-              style={{
-                backgroundColor: "#38bdf8",
-                color: "#0a0f1e",
-              }}
-              role="status"
-            >
-              Click a second node to complete the pipe
-            </div>
-          )}
         </div>
 
         {/* Properties panel (right sidebar) — appears when an element is selected */}
