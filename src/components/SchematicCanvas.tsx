@@ -191,7 +191,11 @@ function SchematicPipeEl({
   // Compute the capacity label for this pipe (e.g. "73%")
   // Only shown when simulation results are present.
   const found = simulationResult?.pipe_results.find((r) => r.pipe_id === sp.pipe.id);
-  const capacityLabel = found ? `${Math.round(found.pct_full)}%` : null;
+  // Capacity % = design flow / full-pipe capacity × 100
+  const pctFull = found && found.q_full_cfs > 0
+    ? (found.q_design_cfs / found.q_full_cfs) * 100
+    : null;
+  const capacityLabel = pctFull !== null ? `${Math.round(pctFull)}%` : null;
   // The H-V Manhattan path
   const path = `M ${sp.x1} ${sp.y1} L ${sp.midX} ${sp.midY} L ${sp.x2} ${sp.y2}`;
   // Arrow head: small triangle at the vertical segment midpoint, pointing down

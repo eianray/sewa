@@ -102,9 +102,11 @@ export default function MapCanvas({
   const drawPolylineRef = useRef<L.Draw.Polyline | null>(null);
 
   // Mutable refs so Leaflet event handlers always call the latest callbacks
+  const onMapClickRef = useRef(onMapClick);
   const onNodeClickRef = useRef(onNodeClick);
   const onPipeClickRef = useRef(onPipeClick);
   const onPolylineDrawnRef = useRef(onPolylineDrawn);
+  useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
   useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
   useEffect(() => { onPipeClickRef.current = onPipeClick; }, [onPipeClick]);
   useEffect(() => { onPolylineDrawnRef.current = onPolylineDrawn; }, [onPolylineDrawn]);
@@ -145,13 +147,15 @@ export default function MapCanvas({
     // Fire custom event when a polyline (pipe) is completed
     map.on("draw:created" as string, (e: L.LeafletEvent) => {
       const event = e as L.DrawEvents.Created;
-      const latlngs = event.layer.getLatLngs() as L.LatLng[];
+      const latlngs = (event.layer as L.Polyline).getLatLngs() as L.LatLng[];
       onPolylineDrawnRef.current?.(latlngs);
     });
 
-    // Map click → place node (node mode only)
+    // Map click → place node (node mode only).
+    // Use ref so the handler always calls the CURRENT onMapClick (which closes
+    // over the current drawMode) rather than the stale one captured at mount.
     map.on("click", (e: L.LeafletMouseEvent) => {
-      onMapClick(e.latlng.lat, e.latlng.lng);
+      onMapClickRef.current(e.latlng.lat, e.latlng.lng);
     });
 
     mapRef.current = map;
