@@ -3,8 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import "leaflet-draw";
-import "leaflet-draw/dist/leaflet.draw.css";
+// leaflet-draw removed — pipe drawing uses two-node-click flow in ProjectDetailClient
 import type { FeatureCollection } from "geojson";
 import type { NetworkNode, NetworkPipe, NodeType, DrawMode, BasemapType, LayerVisibility } from "@/types/network";
 import { NODE_COLORS } from "@/types/network";
@@ -21,8 +20,8 @@ interface MapCanvasProps {
   /** M4: GeoJSON FeatureCollection to render as the project boundary polygon. */
   boundaryGeoJSON?: FeatureCollection | null;
   onMapClick: (lat: number, lng: number) => void;
-  /** Called when leaflet-draw completes a polyline (pipe-draw mode). */
-  onPolylineDrawn?: (latlngs: L.LatLng[]) => void;
+  /** ID of the first node selected in pipe-draw mode, for highlight rendering. */
+  pipeFromNodeId?: string | null;
   onNodeClick: (node: NetworkNode, e: L.LeafletMouseEvent) => void;
   onPipeClick: (pipe: NetworkPipe, e: L.LeafletMouseEvent) => void;
   onMapReady?: (map: L.Map) => void;
@@ -64,13 +63,17 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-function createNodeIcon(type: NodeType, isSelected: boolean): L.DivIcon {
+function createNodeIcon(type: NodeType, isSelected: boolean, isPipeFrom: boolean): L.DivIcon {
   const color = NODE_COLORS[type];
   const size = isSelected ? 20 : 16;
   const border = isSelected ? "3px solid white" : "2px solid rgba(255,255,255,0.6)";
+  // Pulsing cyan ring when this node is the selected FROM node in pipe-draw mode
+  const shadow = isPipeFrom
+    ? "0 0 0 3px #38bdf8, 0 0 14px #38bdf8"
+    : "0 0 6px rgba(0,0,0,0.5)";
   return L.divIcon({
     className: "",
-    html: `<div style="width:${size}px;height:${size}px;background:${color};border:${border};border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,0.5);cursor:pointer;"></div>`,
+    html: `<div style="width:${size}px;height:${size}px;background:${color};border:${border};border-radius:50%;box-shadow:${shadow};cursor:pointer;"></div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
   });
@@ -87,7 +90,7 @@ export default function MapCanvas({
   basemap,
   boundaryGeoJSON,
   onMapClick,
-  onPolylineDrawn,
+  pipeFromNodeId,
   onNodeClick,
   onPipeClick,
   onMapReady,
@@ -98,18 +101,15 @@ export default function MapCanvas({
   const pipeLinesRef = useRef<Map<string, L.Polyline>>(new Map());
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const boundaryLayerRef = useRef<L.GeoJSON | null>(null);
-  /** leaflet-draw polyline tool for pipe drawing */
-  const drawPolylineRef = useRef<L.Draw.Polyline | null>(null);
+
 
   // Mutable refs so Leaflet event handlers always call the latest callbacks
   const onMapClickRef = useRef(onMapClick);
   const onNodeClickRef = useRef(onNodeClick);
   const onPipeClickRef = useRef(onPipeClick);
-  const onPolylineDrawnRef = useRef(onPolylineDrawn);
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
   useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
   useEffect(() => { onPipeClickRef.current = onPipeClick; }, [onPipeClick]);
-  useEffect(() => { onPolylineDrawnRef.current = onPolylineDrawn; }, [onPolylineDrawn]);
 
   // Initialize map
   useEffect(() => {
@@ -129,28 +129,6 @@ export default function MapCanvas({
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
 
-    // Set up leaflet-draw polyline tool for pipe drawing.
-    // L.Draw.Polyline handles cursor, drag-disable, rubber-band preview,
-    // and click capture automatically — just like PMI Workflow Builder.
-    const drawPolyline = new L.Draw.Polyline(map, {
-      shapeOptions: {
-        color: "#38bdf8",
-        weight: 3,
-        opacity: 0.9,
-        smoothFactor: 1.2,
-      },
-      allowIntersection: false,
-      drawError: { color: "#f87171", timeout: 1000 },
-    });
-    drawPolylineRef.current = drawPolyline;
-
-    // Fire custom event when a polyline (pipe) is completed
-    map.on("draw:created" as string, (e: L.LeafletEvent) => {
-      const event = e as L.DrawEvents.Created;
-      const latlngs = (event.layer as L.Polyline).getLatLngs() as L.LatLng[];
-      onPolylineDrawnRef.current?.(latlngs);
-    });
-
     // Map click → place node (node mode only).
     // Use ref so the handler always calls the CURRENT onMapClick (which closes
     // over the current drawMode) rather than the stale one captured at mount.
@@ -168,17 +146,17 @@ export default function MapCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Enable / disable leaflet-draw polyline tool when drawMode changes.
-  // This is what actually switches the cursor and disables map dragging,
-  // exactly like PMI Workflow Builder's L.Draw.Polygon approach.
+  // Crosshair cursor + disable map pan in pipe-draw mode so node clicks register cleanly.
   useEffect(() => {
-    const drawPolyline = drawPolylineRef.current;
-    if (!drawPolyline) return;
-
+    const map = mapRef.current;
+    if (!map) return;
+    const container = map.getContainer();
     if (drawMode === "pipe") {
-      drawPolyline.enable();
+      container.classList.add("leaflet-crosshair");
+      map.dragging.disable();
     } else {
-      drawPolyline.disable();
+      container.classList.remove("leaflet-crosshair");
+      map.dragging.enable();
     }
   }, [drawMode]);
 
@@ -211,7 +189,8 @@ export default function MapCanvas({
 
     nodes.forEach((node) => {
       const isSelected = selectedType === "node" && selectedId === node.id;
-      const icon = createNodeIcon(node.type, isSelected);
+      const isPipeFrom = pipeFromNodeId === node.id;
+      const icon = createNodeIcon(node.type, isSelected, isPipeFrom);
 
       if (nodeMarkersRef.current.has(node.id)) {
         const marker = nodeMarkersRef.current.get(node.id)!;
@@ -236,7 +215,7 @@ export default function MapCanvas({
         nodeMarkersRef.current.set(node.id, marker);
       }
     });
-  }, [nodes, selectedId, selectedType, layerVisibility.labels]);
+  }, [nodes, selectedId, selectedType, layerVisibility.labels, pipeFromNodeId]);
 
   // Render pipes
   useEffect(() => {

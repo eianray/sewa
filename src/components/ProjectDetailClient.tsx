@@ -138,9 +138,8 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
    */
   const [selectedType, setSelectedType] = useState<"node" | "pipe" | null>(null);
 
-  // pipeFirstNodeId — REMOVED. Pipe drawing is now handled by leaflet-draw
-  // via the onPolylineDrawn callback (L.Draw.Polyline handles cursor, drag, and
-  // rubber-band preview automatically — same approach as PMI Workflow Builder).
+  // Two-node-click pipe drawing: user clicks FROM node, then TO node → pipe created.
+  const [pipeFromNodeId, setPipeFromNodeId] = useState<string | null>(null);
 
   // -------------------------------------------------------------------------
   // M2: Meridian health indicator
@@ -552,77 +551,63 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
    */
   /**
    * leaflet-draw completed a polyline — create pipes between each consecutive
-   * pair of latlngs. Fires when the user finishes drawing a pipe in pipe mode
-   * (L.Draw.Polyline, same approach as PMI Workflow Builder).
-   */
-  const handlePolylineDrawn = useCallback(
-    async (latlngs: L.LatLng[]) => {
-      if (!session || latlngs.length < 2) return;
-      // For each pair of consecutive points, find the nearest existing nodes and
-      // create a pipe between them. If no nearby node exists, skip that segment.
-      const snaps: Array<{ from: NetworkNode; to: NetworkNode }> = [];
-      for (let i = 0; i < latlngs.length - 1; i++) {
-        const a = latlngs[i];
-        const b = latlngs[i + 1];
-        // Find nearest node to point A and point B
-        let fromNode: NetworkNode | null = null;
-        let toNode: NetworkNode | null = null;
-        let minDistA = Infinity;
-        let minDistB = Infinity;
-        for (const n of nodes) {
-          const dA = Math.hypot(n.lat - a.lat, n.lng - a.lng);
-          const dB = Math.hypot(n.lat - b.lat, n.lng - b.lng);
-          if (dA < minDistA) { minDistA = dA; fromNode = n; }
-          if (dB < minDistB) { minDistB = dB; toNode = n; }
-        }
-        if (fromNode && toNode && fromNode.id !== toNode.id) {
-          snaps.push({ from: fromNode, to: toNode });
-        }
-      }
-
-      if (snaps.length === 0) {
-        setDrawMode("none");
-        return;
-      }
-
-      // Batch insert all pipes
-      const inserts = snaps.map(({ from, to }) => ({
-        project_id: projectId,
-        user_id: session.user.id,
-        from_node_id: from.id,
-        to_node_id: to.id,
-        diameter_in: 8,
-        material: "PVC" as const,
-      }));
-
-      const { data, error } = await supabase
-        .from("network_pipes")
-        .insert(inserts)
-        .select();
-
-      if (!error && data) {
-        setPipes((prev) => [...prev, ...(data as NetworkPipe[])]);
-      }
-
-      setDrawMode("none");
-      markUnsaved();
-    },
-    [session, projectId, nodes]
-  );
+     // Reset pipeFromNodeId when leaving pipe mode
+  useEffect(() => {
+    if (drawMode !== "pipe") setPipeFromNodeId(null);
+  }, [drawMode]);
 
   /**
    * Handles clicks on individual node markers in the Leaflet map.
-   * In pipe-draw mode the user draws with L.Draw.Polyline (handlePolylineDrawn);
-   * in node mode we place a new node; in default mode we select the node.
+   *
+   * Pipe-draw mode (two-node-click flow):
+   *   1st click → records FROM node (glowing cyan ring shown on that node)
+   *   2nd click (different node) → inserts pipe, exits pipe mode
+   *   2nd click (same node) → cancels selection
+   *
+   * Node mode: ignored (handleMapClick places nodes on map click).
+   * Default mode: selects node for properties panel.
    */
   const handleNodeClick = useCallback(
     async (node: NetworkNode, _e: L.LeafletMouseEvent) => {
-      if (drawMode === "node") return; // handled by handleMapClick
-      // Default: select
+      if (drawMode === "node") return;
+
+      if (drawMode === "pipe") {
+        if (!pipeFromNodeId) {
+          // First click: record FROM node
+          setPipeFromNodeId(node.id);
+          return;
+        }
+        if (pipeFromNodeId === node.id) {
+          // Same node clicked twice — cancel
+          setPipeFromNodeId(null);
+          return;
+        }
+        // Second click: create the pipe
+        if (!session) return;
+        const { data, error } = await supabase
+          .from("network_pipes")
+          .insert({
+            project_id: projectId,
+            user_id: session.user.id,
+            from_node_id: pipeFromNodeId,
+            to_node_id: node.id,
+            diameter_in: 8,
+            material: "PVC" as const,
+          })
+          .select()
+          .single();
+        if (!error && data) setPipes((prev) => [...prev, data as NetworkPipe]);
+        setPipeFromNodeId(null);
+        setDrawMode("none");
+        markUnsaved();
+        return;
+      }
+
+      // Default: select for properties panel
       setSelectedId(node.id);
       setSelectedType("node");
     },
-    [drawMode]
+    [drawMode, pipeFromNodeId, session, projectId]
   );
 
   /**
@@ -957,7 +942,7 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
             basemap={basemap}
             boundaryGeoJSON={boundaryGeoJSON}
             onMapClick={handleMapClick}
-            onPolylineDrawn={handlePolylineDrawn}
+            pipeFromNodeId={pipeFromNodeId}
             onNodeClick={handleNodeClick}
             onPipeClick={handlePipeClick}
             onMapReady={(map) => {
