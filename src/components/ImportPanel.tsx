@@ -76,7 +76,7 @@ function guessMapping(fields: string[]): FieldMapping {
   const has = (pat: string) => f.some((s) => s.includes(pat));
   const val = (pat: string) => fields.find((s) => s.toLowerCase().replace(/[_\s-]/g, "").includes(pat));
   return {
-    label: val("label") ?? val("name") ?? val("id") ?? fields[0] ?? "",
+    label: val("uid") ?? val("unique_id") ?? val("label") ?? val("name") ?? val("id") ?? fields[0] ?? "",
     lat: val("lat") ?? val("latitude") ?? val("y"),
     lng: val("lng") ?? val("lon") ?? val("longitude") ?? val("x"),
     invert_elev: val("invert"),
@@ -311,7 +311,7 @@ export default function ImportPanel({
         {nodeFields.length > 0 && (
           <div className="space-y-1 mb-2">
             <p className="text-xs text-[#94a3b8] font-medium">Map fields:</p>
-            <FieldSelect label="Label *" value={nodeMapping.label} fields={nodeFields} onChange={(v) => setMap(setNodeMapping, "label", v)} required />
+            <FieldSelect label="Unique ID *" value={nodeMapping.label} fields={nodeFields} onChange={(v) => setMap(setNodeMapping, "label", v)} required />
             <FieldSelect label="Latitude" value={nodeMapping.lat ?? ""} fields={nodeFields} onChange={(v) => setMap(setNodeMapping, "lat", v)} />
             <FieldSelect label="Longitude" value={nodeMapping.lng ?? ""} fields={nodeFields} onChange={(v) => setMap(setNodeMapping, "lng", v)} />
             <FieldSelect label="Invert El" value={nodeMapping.invert_elev ?? ""} fields={nodeFields} onChange={(v) => setMap(setNodeMapping, "invert_elev", v)} />
@@ -352,7 +352,7 @@ export default function ImportPanel({
         {pipeFields.length > 0 && (
           <div className="space-y-1 mb-2">
             <p className="text-xs text-[#94a3b8] font-medium">Map fields:</p>
-            <FieldSelect label="Label *" value={pipeMapping.label} fields={pipeFields} onChange={(v) => setMap(setPipeMapping, "label", v)} required />
+            <FieldSelect label="Unique ID *" value={pipeMapping.label} fields={pipeFields} onChange={(v) => setMap(setPipeMapping, "label", v)} required />
             <FieldSelect label="From Node *" value={pipeMapping.from_node_label ?? ""} fields={pipeFields} onChange={(v) => setMap(setPipeMapping, "from_node_label", v)} required />
             <FieldSelect label="To Node *" value={pipeMapping.to_node_label ?? ""} fields={pipeFields} onChange={(v) => setMap(setPipeMapping, "to_node_label", v)} required />
             <FieldSelect label="Diameter (in)" value={pipeMapping.diameter_in ?? ""} fields={pipeFields} onChange={(v) => setMap(setPipeMapping, "diameter_in", v)} />
