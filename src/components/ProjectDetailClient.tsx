@@ -707,6 +707,19 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
     [selectedId]
   );
 
+  /** Delete ALL nodes and pipes for this project (used by "Clear Network" button). */
+  const handleClearNetwork = useCallback(async () => {
+    if (!session) return;
+    if (!confirm(`Delete all ${nodes.length} nodes and ${pipes.length} pipes? This cannot be undone.`)) return;
+    await supabase.from("network_pipes").delete().eq("project_id", projectId);
+    await supabase.from("network_nodes").delete().eq("project_id", projectId);
+    setNodes([]);
+    setPipes([]);
+    setSelectedId(null);
+    setSelectedType(null);
+    markUnsaved();
+  }, [session, projectId, nodes.length, pipes.length]);
+
   // -------------------------------------------------------------------------
   // Derived / convenience values
   // -------------------------------------------------------------------------
@@ -771,27 +784,22 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
           <span className="text-sm text-white font-medium">{project?.name ?? "Project"}</span>
         </div>
 
-        {/* Center: M3 Run Analysis button */}
-        {/*
-          The Run Analysis button is the primary call-to-action for M3.
-          It runs the full Manning's simulation and opens the results panel.
-          Disabled (opacity reduced) while a simulation is already in-flight.
-        */}
+        {/* Center: M3 Run Analysis button — solid filled for high visibility */}
         <div className="flex items-center gap-3">
           <button
             onClick={handleRunAnalysis}
-            disabled={simLoading}
+            disabled={simLoading || nodes.length < 2}
+            title={nodes.length < 2 ? "Add at least 2 nodes to run analysis" : "Run hydraulic analysis"}
             className={`
-              flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold
-              transition-all border
-              ${simLoading
-                ? "opacity-50 cursor-not-allowed border-slate-700 text-slate-500"
-                : "border-sky-500/40 text-sky-400 hover:bg-sky-500/10 hover:border-sky-400 active:scale-95"
+              flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold
+              transition-all shadow-lg
+              ${simLoading || nodes.length < 2
+                ? "opacity-40 cursor-not-allowed bg-slate-700 text-slate-400"
+                : "bg-sky-500 hover:bg-sky-400 text-white active:scale-95 shadow-sky-500/30"
               }
             `}
             aria-label="Run hydraulic analysis"
           >
-            {/* Play icon (inline SVG) */}
             <svg width="10" height="12" viewBox="0 0 10 12" fill="currentColor" aria-hidden="true">
               <path d="M0 0 L10 6 L0 12 Z" />
             </svg>
@@ -833,6 +841,17 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
               </>
             )}
           </div>
+
+          {/* Clear Network — only shown when nodes exist */}
+          {nodes.length > 0 && (
+            <button
+              onClick={handleClearNetwork}
+              className="px-3 py-1 rounded text-xs font-medium text-red-400 border border-red-900/40 hover:bg-red-900/20 transition-colors"
+              title="Delete all nodes and pipes"
+            >
+              Clear Network
+            </button>
+          )}
 
           {/* Zoom controls */}
           <div className="flex items-center border rounded-lg overflow-hidden" style={{ borderColor: "#1e293b" }}>

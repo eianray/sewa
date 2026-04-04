@@ -30,10 +30,22 @@ const NODE_TYPE_LABELS: Record<NodeType, string> = {
   lift_station: "Lift Station",
 };
 
-const BASEMAP_OPTIONS: { value: BasemapType; label: string }[] = [
-  { value: "street", label: "Street" },
-  { value: "satellite", label: "Satellite" },
-  { value: "topo", label: "Topo" },
+const BASEMAP_OPTIONS: { value: BasemapType; label: string; group: string }[] = [
+  // OpenStreetMap
+  { value: "street",           label: "OSM Street",       group: "OpenStreetMap" },
+  { value: "topo",             label: "OSM Topo",          group: "OpenStreetMap" },
+  // Esri
+  { value: "satellite",        label: "Esri Satellite",    group: "Esri" },
+  { value: "esri_topo",        label: "Esri Topo",         group: "Esri" },
+  { value: "esri_terrain",     label: "Esri Terrain",      group: "Esri" },
+  { value: "esri_natgeo",      label: "Esri NatGeo",       group: "Esri" },
+  { value: "esri_street",      label: "Esri Street",       group: "Esri" },
+  // USGS
+  { value: "usgs_imagery",     label: "USGS Imagery",      group: "USGS" },
+  { value: "usgs_topo",        label: "USGS Topo",         group: "USGS" },
+  // Stadia / Stamen
+  { value: "stamen_terrain",   label: "Stamen Terrain",    group: "Stamen" },
+  { value: "stamen_watercolor",label: "Stamen Watercolor", group: "Stamen" },
 ];
 
 export default function ElementPalette({
@@ -155,24 +167,22 @@ export default function ElementPalette({
             );
           })}
 
-          {/* Basemap selector */}
+          {/* Basemap selector — dropdown; too many options for inline buttons */}
           <div className="pt-3">
             <p className="text-xs text-[#94a3b8] mb-2">Basemap</p>
-            <div className="flex gap-1">
-              {BASEMAP_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => onBasemapChange(opt.value)}
-                  className={`flex-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
-                    basemap === opt.value
-                      ? "bg-[#38bdf8] text-[#0a0f1e]"
-                      : "bg-[#111827] text-[#94a3b8] hover:text-white border border-[#1e293b]"
-                  }`}
-                >
-                  {opt.label}
-                </button>
+            <select
+              value={basemap}
+              onChange={(e) => onBasemapChange(e.target.value as BasemapType)}
+              className="w-full rounded px-2 py-1.5 text-xs font-medium bg-[#111827] text-[#e2e8f0] border border-[#1e293b] focus:outline-none focus:border-[#38bdf8] cursor-pointer"
+            >
+              {["OpenStreetMap", "Esri", "USGS", "Stamen"].map((group) => (
+                <optgroup key={group} label={group}>
+                  {BASEMAP_OPTIONS.filter((o) => o.group === group).map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </optgroup>
               ))}
-            </div>
+            </select>
           </div>
         </div>
       </div>

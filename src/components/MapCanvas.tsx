@@ -25,15 +25,42 @@ interface MapCanvasProps {
 }
 
 const BASEMAP_TILES: Record<BasemapType, string> = {
+  // OpenStreetMap
   street: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  // Esri World Imagery (satellite)
   satellite: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  // OpenTopoMap (community topo)
   topo: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+  // Esri World Topo Map
+  esri_topo: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+  // Esri World Terrain Base
+  esri_terrain: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}",
+  // Esri National Geographic
+  esri_natgeo: "https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}",
+  // Esri World Street Map
+  esri_street: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+  // USGS National Map — Imagery
+  usgs_imagery: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
+  // USGS National Map — Topo (The National Map)
+  usgs_topo: "https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}",
+  // Stamen Terrain (via Stadia)
+  stamen_terrain: "https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.jpg",
+  // Stamen Watercolor (artistic — fun for demos)
+  stamen_watercolor: "https://tiles.stadiamaps.com/tiles/stamen_watercolor/{z}/{x}/{y}.jpg",
 };
 
 const BASEMAP_ATTRIBUTION: Record<BasemapType, string> = {
   street: "© OpenStreetMap contributors",
-  satellite: "© Esri",
-  topo: "© OpenTopoMap",
+  satellite: "Tiles © Esri — Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), MapmyIndia, © OpenStreetMap contributors",
+  topo: "© OpenTopoMap (CC-BY-SA)",
+  esri_topo: "Tiles © Esri — Esri, DeLorme, NAVTEQ, TomTom, Intermap, iPC, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), swisstopo, Mapmyindia, © OpenStreetMap contributors",
+  esri_terrain: "Tiles © Esri — USGS, NPS",
+  esri_natgeo: "Tiles © Esri — National Geographic, Esri, DeLorme, HERE, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, iPC",
+  esri_street: "Tiles © Esri — Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012",
+  usgs_imagery: "Tiles courtesy of the U.S. Geological Survey",
+  usgs_topo: "Tiles courtesy of the U.S. Geological Survey",
+  stamen_terrain: "Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under ODbL.",
+  stamen_watercolor: "Map tiles by Stamen Design, under CC BY 3.0. Data by OpenStreetMap, under CC BY SA.",
 };
 
 // Fix default marker icon

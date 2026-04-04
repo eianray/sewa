@@ -32,7 +32,18 @@ export interface NetworkPipe {
 }
 
 export type DrawMode = "none" | "node" | "pipe";
-export type BasemapType = "street" | "satellite" | "topo";
+export type BasemapType =
+  | "street"
+  | "satellite"
+  | "topo"
+  | "esri_topo"
+  | "esri_terrain"
+  | "esri_natgeo"
+  | "esri_street"
+  | "usgs_imagery"
+  | "usgs_topo"
+  | "stamen_terrain"
+  | "stamen_watercolor";
 
 export interface LayerVisibility {
   nodes: boolean;
