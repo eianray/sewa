@@ -244,6 +244,8 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
           onDeleteNode={handleDeleteNode}
           onDeletePipe={handleDeletePipe}
           onClose={() => { setSelectedId(null); setSelectedType(null); }}
+          onFetchElevation={(nodeId, lat, lng) => fetchAndApplyElevation(nodeId, lat, lng)}
+          fetchingElevation={fetchingElevationNodeId === selectedId}
         />
       </div>
     </div>

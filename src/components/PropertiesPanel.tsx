@@ -11,6 +11,8 @@ interface PropertiesPanelProps {
   onDeleteNode: (id: string) => void;
   onDeletePipe: (id: string) => void;
   onClose: () => void;
+  onFetchElevation?: (nodeId: string, lat: number, lng: number) => void;
+  fetchingElevation?: boolean;
 }
 
 const NODE_TYPES: NodeType[] = ["manhole", "inlet", "outlet", "junction", "lift_station"];
@@ -25,6 +27,8 @@ export default function PropertiesPanel({
   onDeleteNode,
   onDeletePipe,
   onClose,
+  onFetchElevation,
+  fetchingElevation,
 }: PropertiesPanelProps) {
   if (!selected || !selectedType) return null;
 
@@ -118,10 +122,22 @@ export default function PropertiesPanel({
           <>
             <div>
               <label className="block text-xs text-[#94a3b8] mb-1.5">Rim Elevation (ft)</label>
+              {node.rim_elev != null && (
+                <span className="text-xs text-[#38bdf8] ml-2">{node.rim_elev.toLocaleString()} ft</span>
+              )}
+              {onFetchElevation && (
+                <button
+                  onClick={() => onFetchElevation(node.id, node.lat, node.lng)}
+                  disabled={fetchingElevation}
+                  className="ml-2 text-xs px-2 py-0.5 rounded bg-[#1e293b] text-[#38bdf8] hover:bg-[#38bdf8]/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {fetchingElevation ? "Fetching…" : "Fetch Elevation"}
+                </button>
+              )}
               <input
                 type="number"
                 step="0.01"
-                className="bg-[#111827] border border-[#1e293b] rounded-lg px-3 py-2 text-white text-sm placeholder-[#475569] focus:outline-none focus:border-[#38bdf8] w-full"
+                className="bg-[#111827] border border-[#1e293b] rounded-lg px-3 py-2 text-white text-sm placeholder-[#475569] focus:outline-none focus:border-[#38bdf8] w-full mt-1.5"
                 value={node.rim_elev ?? ""}
                 placeholder="—"
                 onChange={(e) =>
