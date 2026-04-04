@@ -42,6 +42,7 @@ import ElementPalette from "@/components/ElementPalette";
 import PropertiesPanel from "@/components/PropertiesPanel";
 import SimulationPanel from "@/components/SimulationPanel";
 import type L from "leaflet";
+import type { FeatureCollection } from "geojson";
 
 // Disable SSR for MapCanvas — Leaflet requires the browser DOM and Window object.
 // Dynamic import with { ssr: false } prevents Next.js from trying to render
@@ -176,9 +177,19 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
    */
   const [showSimPanel, setShowSimPanel] = useState(false);
 
-  // -------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // M4: Boundary GeoJSON state
+  // --------------------------------------------------------------------------
+
+  /** The parsed GeoJSON FeatureCollection for the project boundary polygon. */
+  const [boundaryGeoJSON, setBoundaryGeoJSON] = useState<FeatureCollection | null>(null);
+
+  /** Human-readable label for the current boundary (derived from filename). */
+  const [boundaryLabel, setBoundaryLabel] = useState<string | null>(null);
+
+  // --------------------------------------------------------------------------
   // Map reference
-  // -------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
 
   /**
    * Reference to the underlying Leaflet Map instance.
@@ -245,6 +256,16 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
     if (proj) setProject(proj as Project);
     setNodes((nodeData as NetworkNode[]) || []);
     setPipes((pipeData as NetworkPipe[]) || []);
+
+    // M4: Load saved boundary from the project row
+    const projRecord = proj as Project | null;
+    if (projRecord?.boundary_geojson) {
+      setBoundaryGeoJSON(projRecord.boundary_geojson as FeatureCollection);
+    }
+    if (projRecord?.boundary_label) {
+      setBoundaryLabel(projRecord.boundary_label);
+    }
+
     setLoading(false);
   }
 
@@ -305,9 +326,64 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
     setFetchingElevationNodeId(null);
   }
 
-  // -------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
+  // M4: Boundary import / clear
+  // --------------------------------------------------------------------------
+
+  /**
+   * Called by ImportButton when the user successfully selects a file.
+   * Saves boundary_geojson + boundary_label to Supabase and updates
+   * local state so the map re-renders the polygon.
+   *
+   * @param fc    - Parsed GeoJSON FeatureCollection from parseUploadedFile()
+   * @param label - Human-readable label derived from the source filename
+   */
+  const handleImportBoundary = useCallback(
+    async (fc: FeatureCollection, label: string) => {
+      setBoundaryGeoJSON(fc);
+      setBoundaryLabel(label);
+
+      // Persist to Supabase so the boundary survives page refreshes
+      const { error } = await supabase
+        .from("projects")
+        .update({
+          boundary_geojson: fc as unknown as Record<string, unknown>,
+          boundary_label: label,
+        })
+        .eq("id", projectId);
+
+      if (error) {
+        console.error("[SEWA] Failed to save boundary to Supabase:", error.message);
+      }
+
+      markUnsaved();
+    },
+    [projectId]
+  );
+
+  /**
+   * Called by ImportButton when the user clicks × to remove the boundary.
+   * Sets both fields to null in Supabase and local state.
+   */
+  const handleClearBoundary = useCallback(async () => {
+    setBoundaryGeoJSON(null);
+    setBoundaryLabel(null);
+
+    const { error } = await supabase
+      .from("projects")
+      .update({ boundary_geojson: null, boundary_label: null })
+      .eq("id", projectId);
+
+    if (error) {
+      console.error("[SEWA] Failed to clear boundary in Supabase:", error.message);
+    }
+
+    markUnsaved();
+  }, [projectId]);
+
+  // --------------------------------------------------------------------------
   // M3: Simulation runner
-  // -------------------------------------------------------------------------
+  // --------------------------------------------------------------------------
 
   /**
    * Triggers a Manning's steady-state simulation run:
@@ -726,6 +802,7 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
           nodeTypeToAdd={nodeTypeToAdd}
           layerVisibility={layerVisibility}
           basemap={basemap}
+          currentLabel={boundaryLabel}
           onDrawModeChange={(mode) => {
             setDrawMode(mode);
             // Clear any in-progress pipe-draw if the user exits pipe mode
@@ -734,6 +811,8 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
           onNodeTypeToAdd={setNodeTypeToAdd}
           onLayerVisibilityChange={setLayerVisibility}
           onBasemapChange={setBasemap}
+          onImportBoundary={handleImportBoundary}
+          onClearBoundary={handleClearBoundary}
         />
 
         {/* Map canvas (center) */}
@@ -747,6 +826,7 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
             selectedType={selectedType}
             layerVisibility={layerVisibility}
             basemap={basemap}
+            boundaryGeoJSON={boundaryGeoJSON}
             onMapClick={handleMapClick}
             onNodeClick={handleNodeClick}
             onPipeClick={handlePipeClick}

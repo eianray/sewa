@@ -9,6 +9,7 @@ import type { NetworkNode, NetworkPipe, NodeType, DrawMode, BasemapType, LayerVi
 import ElementPalette from "@/components/ElementPalette";
 import PropertiesPanel from "@/components/PropertiesPanel";
 import type L from "leaflet";
+import type { FeatureCollection } from "geojson";
 
 const MapCanvas = dynamic(() => import("@/components/MapCanvas"), { ssr: false });
 
@@ -57,6 +58,8 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
   const [selectedType, setSelectedType] = useState<"node" | "pipe" | null>(null);
   const [pipeFirstNodeId, setPipeFirstNodeId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [boundaryGeoJSON, setBoundaryGeoJSON] = useState<FeatureCollection | null>(null);
+  const [boundaryLabel, setBoundaryLabel] = useState<string | null>(null);
 
   const mapRef = useRef<L.Map | null>(null);
 
@@ -83,6 +86,9 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
     if (proj) setProject(proj as Project);
     setNodes((nodeData as NetworkNode[]) || []);
     setPipes((pipeData as NetworkPipe[]) || []);
+    const projRecord = proj as Project | null;
+    if (projRecord?.boundary_geojson) setBoundaryGeoJSON(projRecord.boundary_geojson as FeatureCollection);
+    if (projRecord?.boundary_label) setBoundaryLabel(projRecord.boundary_label);
     setLoading(false);
   }
 
@@ -134,6 +140,22 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
   const handlePipeClick = useCallback((pipe: NetworkPipe, _e: L.LeafletMouseEvent) => {
     if (drawMode !== "pipe") { setSelectedId(pipe.id); setSelectedType("pipe"); }
   }, [drawMode]);
+
+  const handleImportBoundary = useCallback(async (fc: FeatureCollection, label: string) => {
+    setBoundaryGeoJSON(fc);
+    setBoundaryLabel(label);
+    const { error } = await supabase.from("projects").update({ boundary_geojson: fc as unknown as Record<string, unknown>, boundary_label: label }).eq("id", projectId);
+    if (error) console.error("[SEWA] Failed to save boundary:", error.message);
+    markUnsaved();
+  }, [projectId]);
+
+  const handleClearBoundary = useCallback(async () => {
+    setBoundaryGeoJSON(null);
+    setBoundaryLabel(null);
+    const { error } = await supabase.from("projects").update({ boundary_geojson: null, boundary_label: null }).eq("id", projectId);
+    if (error) console.error("[SEWA] Failed to clear boundary:", error.message);
+    markUnsaved();
+  }, [projectId]);
 
   const handleUpdateNode = useCallback(async (id: string, updates: Partial<NetworkNode>) => {
     setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, ...updates } : n)));
@@ -206,10 +228,13 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
         <ElementPalette
           drawMode={drawMode} nodeTypeToAdd={nodeTypeToAdd}
           layerVisibility={layerVisibility} basemap={basemap}
+          currentLabel={boundaryLabel}
           onDrawModeChange={(mode) => { setDrawMode(mode); if (mode !== "pipe") setPipeFirstNodeId(null); }}
           onNodeTypeToAdd={setNodeTypeToAdd}
           onLayerVisibilityChange={setLayerVisibility}
           onBasemapChange={setBasemap}
+          onImportBoundary={handleImportBoundary}
+          onClearBoundary={handleClearBoundary}
         />
         <div className="flex-1 relative">
           <MapCanvas
@@ -217,6 +242,7 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
             drawMode={drawMode} nodeTypeToAdd={nodeTypeToAdd}
             selectedId={selectedId} selectedType={selectedType}
             layerVisibility={layerVisibility} basemap={basemap}
+            boundaryGeoJSON={boundaryGeoJSON}
             onMapClick={handleMapClick}
             onNodeClick={handleNodeClick}
             onPipeClick={handlePipeClick}

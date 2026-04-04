@@ -3,6 +3,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import type { FeatureCollection } from "geojson";
 import type { NetworkNode, NetworkPipe, NodeType, DrawMode, BasemapType, LayerVisibility } from "@/types/network";
 import { NODE_COLORS } from "@/types/network";
 
@@ -15,6 +16,8 @@ interface MapCanvasProps {
   selectedType: "node" | "pipe" | null;
   layerVisibility: LayerVisibility;
   basemap: BasemapType;
+  /** M4: GeoJSON FeatureCollection to render as the project boundary polygon. */
+  boundaryGeoJSON?: FeatureCollection | null;
   onMapClick: (lat: number, lng: number) => void;
   onNodeClick: (node: NetworkNode, e: L.LeafletMouseEvent) => void;
   onPipeClick: (pipe: NetworkPipe, e: L.LeafletMouseEvent) => void;
@@ -69,6 +72,7 @@ export default function MapCanvas({
   selectedType,
   layerVisibility,
   basemap,
+  boundaryGeoJSON,
   onMapClick,
   onNodeClick,
   onPipeClick,
@@ -79,6 +83,8 @@ export default function MapCanvas({
   const nodeMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const pipeLinesRef = useRef<Map<string, L.Polyline>>(new Map());
   const tileLayerRef = useRef<L.TileLayer | null>(null);
+  /** M4: Ref to the Leaflet GeoJSON layer showing the project boundary polygon. */
+  const boundaryLayerRef = useRef<L.GeoJSON | null>(null);
 
   // Initialize map
   useEffect(() => {
@@ -260,6 +266,47 @@ export default function MapCanvas({
       }
     });
   }, [layerVisibility.pipes]);
+
+  // --------------------------------------------------------------------
+  // M4: Render project boundary GeoJSON as a polygon overlay on the map.
+  //
+  // When boundaryGeoJSON prop changes:
+  //   1. Remove the previous L.GeoJSON layer if one exists
+  //   2. Add a new L.GeoJSON layer with sky-blue styling (see style options)
+  //   3. Auto-fit the Leaflet map to the layer's bounding box with 40px
+  //      padding so the boundary has breathing room on all sides
+  // --------------------------------------------------------------------
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Remove stale layer
+    if (boundaryLayerRef.current) {
+      boundaryLayerRef.current.remove();
+      boundaryLayerRef.current = null;
+    }
+
+    // Nothing to render — just clear
+    if (!boundaryGeoJSON || boundaryGeoJSON.features.length === 0) return;
+
+    // Style: sky-blue stroke, transparent fill so nodes/pipes remain visible
+    const BOUNDARY_STYLE: L.GeoJSONOptions = {
+      style: {
+        color: "#38bdf8",
+        weight: 2,
+        fillOpacity: 0.05,
+      },
+    };
+
+    const layer = L.geoJSON(boundaryGeoJSON, BOUNDARY_STYLE).addTo(map);
+    boundaryLayerRef.current = layer;
+
+    // Auto-fit map bounds to the boundary polygon with breathing room
+    const bounds = layer.getBounds();
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [40, 40] });
+    }
+  }, [boundaryGeoJSON]);
 
   return (
     <div

@@ -14,7 +14,8 @@
     "leaflet": "^1.9.4",
     "next": "16.2.2",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "shpjs": "^6.2.0"
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "^1.18.0",
@@ -22,6 +23,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/shpjs": "^3.4.7",
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "tailwindcss": "^4",
