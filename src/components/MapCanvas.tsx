@@ -318,11 +318,13 @@ export default function MapCanvas({
     }
   }, [boundaryGeoJSON]);
 
+  // position: absolute + inset: 0 fills the parent's positioned context reliably.
+  // Leaflet requires a container with a non-zero height; flex-1 alone doesn't
+  // guarantee height when the parent isn't itself a flex container.
   return (
     <div
       ref={mapContainerRef}
-      className="flex-1 relative"
-      style={{ background: "#0d1526" }}
+      style={{ position: "absolute", inset: 0, background: "#0d1526" }}
     />
   );
 }
