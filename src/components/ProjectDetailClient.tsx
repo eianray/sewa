@@ -293,15 +293,9 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
         const avgLat = loadedNodes.reduce((s, n) => s + n.lat, 0) / loadedNodes.length;
         const avgLng = loadedNodes.reduce((s, n) => s + n.lng, 0) / loadedNodes.length;
         map.setView([avgLat, avgLng], 14);
-      } else if (projRecord?.boundary_geojson) {
-        // No nodes yet but boundary exists — fit to it.
-        // Import Leaflet dynamically since this runs in a browser-only context.
-        try {
-          const Leaflet = (await import("leaflet")).default;
-          const layer = Leaflet.geoJSON(projRecord.boundary_geojson as FeatureCollection);
-          map.fitBounds(layer.getBounds(), { padding: [40, 40] });
-        } catch { /* ignore malformed geojson */ }
       }
+      // Note: if no nodes exist but a boundary is loaded, MapCanvas handles
+      // auto-fitting via its own boundaryGeoJSON useEffect.
     }, 100);
   }
 
