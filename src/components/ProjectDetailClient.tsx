@@ -509,6 +509,8 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
    */
   const handleMapClick = useCallback(
     async (lat: number, lng: number) => {
+      // Debug: log every click so we can see if the handler fires and what state it sees
+      console.log("[SEWA] handleMapClick", { lat, lng, drawMode, nodeTypeToAdd, hasSession: !!session });
       // In pipe mode, map-canvas clicks are ignored — user must click node markers.
       if (!session || drawMode === "pipe") return;
       if (drawMode !== "node" || !nodeTypeToAdd) return;
