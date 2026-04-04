@@ -6,6 +6,8 @@ import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase";
 import type { Project } from "@/types/project";
 import type { NetworkNode, NetworkPipe, NodeType, DrawMode, BasemapType, LayerVisibility } from "@/types/network";
+import { loadDemTile } from "@/lib/demSampler";
+import { DEFAULT_BURIAL_DEPTH_FT } from "@/lib/lidarElevation";
 import ElementPalette from "@/components/ElementPalette";
 import PropertiesPanel from "@/components/PropertiesPanel";
 import type L from "leaflet";
@@ -60,6 +62,9 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
   const [authChecked, setAuthChecked] = useState(false);
   const [boundaryGeoJSON, setBoundaryGeoJSON] = useState<FeatureCollection | null>(null);
   const [boundaryLabel, setBoundaryLabel] = useState<string | null>(null);
+  const [demTile, setDemTile] = useState<string | null>(null);
+  const [grabbingLidar, setGrabbingLidar] = useState(false);
+
 
   const mapRef = useRef<L.Map | null>(null);
 
@@ -89,6 +94,7 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
     const projRecord = proj as Project | null;
     if (projRecord?.boundary_geojson) setBoundaryGeoJSON(projRecord.boundary_geojson as FeatureCollection);
     if (projRecord?.boundary_label) setBoundaryLabel(projRecord.boundary_label);
+    if (projRecord?.dem_tile) setDemTile(projRecord.dem_tile);
     setLoading(false);
   }
 
@@ -218,6 +224,57 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
     markUnsaved();
   }, [selectedId]);
 
+  // Grab elevation from LIDAR for a single node — fetches tile from USGS WCS using project bbox
+  const handleGrabLidar = useCallback(async (nodeId: string, lat: number, lng: number) => {
+    if (!boundaryGeoJSON) { console.warn("[SEWA] Grab LIDAR requires a boundary polygon first"); return; }
+    setGrabbingLidar(true);
+    try {
+      const coords = (boundaryGeoJSON.features[0]?.geometry as GeoJSON.Polygon)?.coordinates[0];
+      if (!coords) return;
+      const lngs = coords.map((c: number[]) => c[0]);
+      const lats = coords.map((c: number[]) => c[1]);
+      const bbox = {
+        minLng: Math.min(...lngs), maxLng: Math.max(...lngs),
+        minLat: Math.min(...lats), maxLat: Math.max(...lats),
+      };
+      const tile = await loadDemTile(bbox, 1024, 1024);
+      if (!tile) { console.warn("[SEWA] LIDAR tile fetch failed"); return; }
+      const elevFt = tile.sampleElevationFt(lat, lng);
+      if (elevFt === null) { console.warn("[SEWA] LIDAR: no coverage at", lat, lng); return; }
+      const rimElev = +elevFt.toFixed(2);
+      const invertElev = +(elevFt - DEFAULT_BURIAL_DEPTH_FT).toFixed(2);
+      await handleUpdateNode(nodeId, { rim_elev: rimElev, invert_elev: invertElev });
+    } finally {
+      setGrabbingLidar(false);
+    }
+  }, [boundaryGeoJSON, handleUpdateNode]);
+
+  // Auto-calculate slope from rim elevations of connected nodes
+  const handleAutoSlope = useCallback(async (pipeId: string) => {
+    const pipe = pipes.find((p) => p.id === pipeId);
+    if (!pipe) return;
+    const fromNode = nodes.find((n) => n.id === pipe.from_node_id);
+    const toNode = nodes.find((n) => n.id === pipe.to_node_id);
+    if (!fromNode || !toNode) return;
+    if (fromNode.rim_elev == null || toNode.rim_elev == null) {
+      console.warn("[SEWA] Auto-slope: rim elevations missing on one or both nodes"); return;
+    }
+    let lenFt = pipe.length_ft;
+    if (!lenFt) {
+      // Haversine
+      const R = 20902230; const lat1 = (fromNode.lat * Math.PI) / 180;
+      const lat2 = (toNode.lat * Math.PI) / 180;
+      const dLat = ((toNode.lat - fromNode.lat) * Math.PI) / 180;
+      const dLng = ((toNode.lng - fromNode.lng) * Math.PI) / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      lenFt = Math.round(R * c * 100) / 100;
+    }
+    if (lenFt <= 0) return;
+    const slope = Math.abs(fromNode.rim_elev - toNode.rim_elev) / lenFt * 100;
+    await handleUpdatePipe(pipeId, { slope_pct: +slope.toFixed(3) });
+  }, [pipes, nodes, handleUpdatePipe]);
+
   const selectedElement = selectedType === "node"
     ? nodes.find((n) => n.id === selectedId) ?? null
     : pipes.find((p) => p.id === selectedId) ?? null;
@@ -296,11 +353,15 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
           selected={selectedElement as NetworkNode | NetworkPipe | null}
           selectedType={selectedType}
           nodes={nodes}
+          demTile={demTile ?? undefined}
           onUpdateNode={handleUpdateNode}
           onUpdatePipe={handleUpdatePipe}
           onDeleteNode={handleDeleteNode}
           onDeletePipe={handleDeletePipe}
           onClose={() => { setSelectedId(null); setSelectedType(null); }}
+          onGrabLidar={handleGrabLidar}
+          grabbingLidar={grabbingLidar}
+          onAutoSlope={handleAutoSlope}
         />
       </div>
     </div>

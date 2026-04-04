@@ -11,4 +11,6 @@ export interface Project {
   boundary_geojson?: FeatureCollection | null;
   /** M4: Human-readable label for the boundary (derived from uploaded filename). */
   boundary_label?: string | null;
+  /** M5: Base64 or URL of the DEM tile stored for this project. */
+  dem_tile?: string | null;
 }

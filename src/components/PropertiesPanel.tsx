@@ -6,6 +6,7 @@ interface PropertiesPanelProps {
   selected: NetworkNode | NetworkPipe | null;
   selectedType: "node" | "pipe" | null;
   nodes: NetworkNode[];
+  demTile?: string;
   onUpdateNode: (id: string, updates: Partial<NetworkNode>) => void;
   onUpdatePipe: (id: string, updates: Partial<NetworkPipe>) => void;
   onDeleteNode: (id: string) => void;
@@ -13,15 +14,26 @@ interface PropertiesPanelProps {
   onClose: () => void;
   onFetchElevation?: (nodeId: string, lat: number, lng: number) => void;
   fetchingElevation?: boolean;
+  onGrabLidar?: (nodeId: string, lat: number, lng: number) => void;
+  grabbingLidar?: boolean;
+  onAutoSlope?: (pipeId: string) => void;
 }
 
 const NODE_TYPES: NodeType[] = ["manhole", "inlet", "outlet", "junction", "lift_station"];
+const NODE_TYPE_LABELS: Record<NodeType, string> = {
+  manhole: "Manhole",
+  inlet: "Inlet",
+  outlet: "Outlet",
+  junction: "Junction",
+  lift_station: "Lift Station",
+};
 const PIPE_MATERIALS: PipeMaterial[] = ["PVC", "RCP", "HDPE", "DI"];
 
 export default function PropertiesPanel({
   selected,
   selectedType,
   nodes,
+  demTile,
   onUpdateNode,
   onUpdatePipe,
   onDeleteNode,
@@ -29,6 +41,9 @@ export default function PropertiesPanel({
   onClose,
   onFetchElevation,
   fetchingElevation,
+  onGrabLidar,
+  grabbingLidar,
+  onAutoSlope,
 }: PropertiesPanelProps) {
   if (!selected || !selectedType) return null;
 
@@ -111,7 +126,7 @@ export default function PropertiesPanel({
               onChange={(e) => onUpdateNode(node.id, { type: e.target.value as NodeType })}
             >
               {NODE_TYPES.map((t) => (
-                <option key={t} value={t}>{t.replace("_", " ")}</option>
+                <option key={t} value={t}>{NODE_TYPE_LABELS[t]}</option>
               ))}
             </select>
           </div>
@@ -146,6 +161,15 @@ export default function PropertiesPanel({
                   })
                 }
               />
+              {onGrabLidar && demTile && (
+                <button
+                  onClick={() => onGrabLidar(node.id, node.lat, node.lng)}
+                  disabled={grabbingLidar}
+                  className="mt-1 w-full rounded text-xs px-3 py-1.5 bg-[#111827] border border-[#1e293b] text-[#94a3b8] hover:border-[#38bdf8]/50 hover:text-[#38bdf8] transition-colors"
+                >
+                  {grabbingLidar ? "Sampling LIDAR…" : "Grab Elevation from LIDAR"}
+                </button>
+              )}
             </div>
             <div>
               <label className="block text-xs text-[#94a3b8] mb-1.5">Invert Elevation (ft)</label>
@@ -230,9 +254,40 @@ export default function PropertiesPanel({
                   })
                 }
               />
+              {onAutoSlope && (
+                <button
+                  onClick={() => onAutoSlope(pipe.id)}
+                  className="mt-1 w-full rounded text-xs px-3 py-1.5 bg-[#111827] border border-[#1e293b] text-[#94a3b8] hover:border-[#f97316]/50 hover:text-[#f97316] transition-colors"
+                >
+                  Auto-Calculate Slope
+                </button>
+              )}
             </div>
           </>
         )}
+
+        {/* Comments — shared for nodes and pipes */}
+        <div>
+          <label className="block text-xs text-[#94a3b8] mb-1.5">Comments</label>
+          <textarea
+            rows={3}
+            maxLength={1000}
+            className="bg-[#111827] border border-[#1e293b] rounded-lg px-3 py-2 text-white text-sm placeholder-[#475569] focus:outline-none focus:border-[#38bdf8] w-full resize-none"
+            value={(selected.properties?.comments as string) ?? ""}
+            placeholder="Add notes…"
+            onChange={(e) => {
+              const comments = e.target.value;
+              if (isNode) {
+                onUpdateNode(node.id, { properties: { ...node.properties, comments } });
+              } else {
+                onUpdatePipe(pipe.id, { properties: { ...pipe.properties, comments } });
+              }
+            }}
+          />
+          <p className="text-xs text-[#475569] mt-0.5 text-right">
+            {((selected.properties?.comments as string) ?? "").length}/1000
+          </p>
+        </div>
       </div>
 
       {/* Footer */}
