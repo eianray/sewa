@@ -458,9 +458,22 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
     setSimLoading(true);
     setShowSimPanel(true);
 
-    // Step 1: Run Manning's equation synchronously in the browser.
+    // Step 1: Optionally patch node elevations from LIDAR before simulation.
+    // When the user has selected "LIDAR" elevation source AND a DEM tile is
+    // loaded, replace each node's invert_elev with (DEM_surface - burial_depth).
+    // This allows rapid preliminary analysis without field survey data.
+    // Falls back to attribute elevation if DEM doesn't cover a node's location.
+    let simNodes = nodes;
+    if (elevationSource === "lidar" && demTile) {
+      const { applyLidarElevations, lidarPatchSummary } = await import("@/lib/lidarElevation");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      simNodes = applyLidarElevations(nodes as any[], demTile) as typeof nodes;
+      console.log("[SEWA] handleRunAnalysis:", lidarPatchSummary(nodes as any[], simNodes as any[]));
+    }
+
+    // Step 2: Run Manning's equation synchronously in the browser.
     // This is a pure function with no side effects — safe to call any number of times.
-    const result = runSimulation(nodes, pipes);
+    const result = runSimulation(simNodes, pipes);
 
     // Step 2: Persist the result to Supabase so it survives page refreshes
     // and can be compared against future runs (M4: historical run comparison).
@@ -482,7 +495,7 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
     // Step 3: Store in React state to drive the SimulationPanel UI
     setSimResult(result);
     setSimLoading(false);
-  }, [session, nodes, pipes, projectId]);
+  }, [session, nodes, pipes, projectId, elevationSource, demTile]);
 
   // -------------------------------------------------------------------------
   // Map interaction handlers

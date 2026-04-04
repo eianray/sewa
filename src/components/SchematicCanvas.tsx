@@ -181,11 +181,17 @@ function SchematicPipeEl({
   sp,
   color,
   dashArray,
+  simulationResult,
 }: {
   sp: SchematicPipe;
   color: string;
   dashArray: string;
+  simulationResult?: SimulationResult | null;
 }) {
+  // Compute the capacity label for this pipe (e.g. "73%")
+  // Only shown when simulation results are present.
+  const found = simulationResult?.pipe_results.find((r) => r.pipe_id === sp.pipe.id);
+  const capacityLabel = found ? `${Math.round(found.pct_full)}%` : null;
   // The H-V Manhattan path
   const path = `M ${sp.x1} ${sp.y1} L ${sp.midX} ${sp.midY} L ${sp.x2} ${sp.y2}`;
   // Arrow head: small triangle at the vertical segment midpoint, pointing down
@@ -209,6 +215,32 @@ function SchematicPipeEl({
       />
       {/* Flow direction arrow — small filled triangle */}
       <polygon points={arrowPoints} fill={color} opacity={0.8} />
+      {/* Capacity % label — only rendered when a simulation result is available */}
+      {capacityLabel && (
+        <g>
+          {/* Background pill for readability */}
+          <rect
+            x={sp.midX - 16}
+            y={arrowY - 20}
+            width={32}
+            height={13}
+            rx={4}
+            fill="#0d1526"
+            opacity={0.85}
+          />
+          <text
+            x={sp.midX}
+            y={arrowY - 10}
+            textAnchor="middle"
+            fontSize={8}
+            fontFamily="monospace"
+            fill={color}
+            fontWeight="bold"
+          >
+            {capacityLabel}
+          </text>
+        </g>
+      )}
     </g>
   );
 }
@@ -301,6 +333,7 @@ export default function SchematicCanvas({
               sp={sp}
               color={pipeColor(sp.pipe.id, simulationResult)}
               dashArray={pipeDashArray(sp.pipe.id, simulationResult)}
+              simulationResult={simulationResult}
             />
           ))}
           {/* Node circles */}
