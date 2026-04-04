@@ -156,14 +156,20 @@ export default function MapCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update cursor based on draw mode
+  // Update cursor based on draw mode.
+  // Must target the .leaflet-container element directly — Leaflet sets its own
+  // cursor styles on that element and will override anything on the wrapper div.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    const container = map.getContainer() as HTMLElement;
     if (drawMode === "node" || drawMode === "pipe") {
-      mapContainerRef.current!.style.cursor = "crosshair";
+      container.style.cursor = "crosshair";
+      // Also disable map dragging so clicks reliably land on markers
+      map.dragging.disable();
     } else {
-      mapContainerRef.current!.style.cursor = "";
+      container.style.cursor = "";
+      map.dragging.enable();
     }
   }, [drawMode, nodeTypeToAdd]);
 
