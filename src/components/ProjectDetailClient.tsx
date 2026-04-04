@@ -513,7 +513,9 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
    */
   const handleMapClick = useCallback(
     async (lat: number, lng: number) => {
-      if (!session || drawMode !== "node" || !nodeTypeToAdd) return;
+      // In pipe mode, map-canvas clicks are ignored — user must click node markers.
+      if (!session || drawMode === "pipe") return;
+      if (drawMode !== "node" || !nodeTypeToAdd) return;
 
       const { data, error } = await supabase
         .from("network_nodes")

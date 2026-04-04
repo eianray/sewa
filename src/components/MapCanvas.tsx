@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useMemo } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { FeatureCollection } from "geojson";
@@ -109,6 +109,14 @@ export default function MapCanvas({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const nodeMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const pipeLinesRef = useRef<Map<string, L.Polyline>>(new Map());
+
+  // Keep mutable refs to the latest callbacks so marker closures never go stale.
+  // Leaflet markers are created once; without this, their click handlers
+  // would capture the initial (stale) callback from the first render.
+  const onNodeClickRef = useRef(onNodeClick);
+  const onPipeClickRef = useRef(onPipeClick);
+  useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
+  useEffect(() => { onPipeClickRef.current = onPipeClick; }, [onPipeClick]);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   /** M4: Ref to the Leaflet GeoJSON layer showing the project boundary polygon. */
   const boundaryLayerRef = useRef<L.GeoJSON | null>(null);
@@ -131,12 +139,11 @@ export default function MapCanvas({
     tileLayer.addTo(map);
     tileLayerRef.current = tileLayer;
 
+    // Keep a ref for onMapClick too, so the map-level click handler
+    // always calls the current version (drawMode changes over time).
+    const onMapClickRef = { current: onMapClick };
     map.on("click", (e: L.LeafletMouseEvent) => {
-      if (drawMode === "node" && nodeTypeToAdd) {
-        onMapClick(e.latlng.lat, e.latlng.lng);
-      } else if (drawMode === "none") {
-        // deselect
-      }
+      onMapClickRef.current(e.latlng.lat, e.latlng.lng);
     });
 
     mapRef.current = map;
@@ -153,7 +160,7 @@ export default function MapCanvas({
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    if (drawMode === "node") {
+    if (drawMode === "node" || drawMode === "pipe") {
       mapContainerRef.current!.style.cursor = "crosshair";
     } else {
       mapContainerRef.current!.style.cursor = "";
@@ -211,7 +218,9 @@ export default function MapCanvas({
           });
         marker.on("click", (e: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(e);
-          onNodeClick(node, e);
+          // Use the ref so this handler always calls the current callback,
+          // even after drawMode has changed since the marker was created.
+          onNodeClickRef.current(node, e);
         });
         nodeMarkersRef.current.set(node.id, marker);
       }
@@ -266,7 +275,7 @@ export default function MapCanvas({
           });
         line.on("click", (e: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(e);
-          onPipeClick(pipe, e);
+          onPipeClickRef.current(pipe, e);
         });
         pipeLinesRef.current.set(pipe.id, line);
       }
