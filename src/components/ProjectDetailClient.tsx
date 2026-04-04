@@ -43,6 +43,11 @@ import PropertiesPanel from "@/components/PropertiesPanel";
 import SimulationPanel from "@/components/SimulationPanel";
 import type L from "leaflet";
 import type { FeatureCollection } from "geojson";
+import { loadDemTile } from "@/lib/demSampler";
+import type { DemTile } from "@/lib/demSampler";
+import ViewToggle from "@/components/ViewToggle";
+import type { ViewMode, ElevationSource } from "@/components/ViewToggle";
+const SchematicCanvas = dynamic(() => import("@/components/SchematicCanvas"), { ssr: false });
 
 // Disable SSR for MapCanvas — Leaflet requires the browser DOM and Window object.
 // Dynamic import with { ssr: false } prevents Next.js from trying to render
@@ -186,6 +191,19 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
 
   /** Human-readable label for the current boundary (derived from filename). */
   const [boundaryLabel, setBoundaryLabel] = useState<string | null>(null);
+
+  /**
+   * The loaded DEM tile for this project. Fetched once when a boundary is
+   * imported and stored in component state. Used by SchematicCanvas to
+   * derive LIDAR elevations for each node.
+   */
+  const [demTile, setDemTile] = useState<DemTile | null>(null);
+
+  /** Which view is currently shown: geographic GIS map, or topology schematic. */
+  const [viewMode, setViewMode] = useState<ViewMode>("gis");
+
+  /** Which elevation source is used for schematic simulations. */
+  const [elevationSource, setElevationSource] = useState<ElevationSource>("attribute");
 
   // --------------------------------------------------------------------------
   // Map reference
@@ -354,6 +372,42 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
 
       if (error) {
         console.error("[SEWA] Failed to save boundary to Supabase:", error.message);
+      }
+
+      // ── Fetch DEM tile for this boundary ──────────────────────────────
+      // Compute a bounding box from the feature collection's coordinates,
+      // then load a GeoTIFF tile from USGS 3DEP covering the project area.
+      // This tile is cached in state and reused for all LIDAR elevation lookups.
+      try {
+        const coords: number[][] = [];
+        fc.features.forEach((f) => {
+          if (f.geometry.type === "Polygon") {
+            f.geometry.coordinates[0].forEach((c) => coords.push(c as number[]));
+          } else if (f.geometry.type === "MultiPolygon") {
+            f.geometry.coordinates.forEach((poly) =>
+              poly[0].forEach((c) => coords.push(c as number[]))
+            );
+          }
+        });
+        if (coords.length > 0) {
+          const lngs = coords.map((c) => c[0]);
+          const lats = coords.map((c) => c[1]);
+          const bbox = {
+            minLng: Math.min(...lngs) - 0.01,
+            minLat: Math.min(...lats) - 0.01,
+            maxLng: Math.max(...lngs) + 0.01,
+            maxLat: Math.max(...lats) + 0.01,
+          };
+          const tile = await loadDemTile(bbox);
+          setDemTile(tile);
+          if (tile) {
+            console.log("[SEWA] DEM tile loaded for boundary bbox:", bbox);
+          } else {
+            console.warn("[SEWA] DEM tile load returned null — LIDAR mode unavailable");
+          }
+        }
+      } catch (err) {
+        console.error("[SEWA] DEM tile fetch failed:", err);
       }
 
       markUnsaved();
@@ -815,8 +869,26 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
           onClearBoundary={handleClearBoundary}
         />
 
-        {/* Map canvas (center) */}
+        {/* Map canvas (center) — switches between GIS and Schematic view */}
         <div className="flex-1 relative">
+
+          {/* View Mode toggle overlay — top-left of map area */}
+          <ViewToggle
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            elevationSource={elevationSource}
+            onElevationSourceChange={setElevationSource}
+            hasDemTile={!!demTile}
+          />
+
+          {/* Conditional: GIS map (editable) or Schematic (read-only) */}
+          {viewMode === "schematic" ? (
+            <SchematicCanvas
+              nodes={nodes}
+              pipes={pipes}
+              simulationResult={simResult}
+            />
+          ) : (
           <MapCanvas
             nodes={nodes}
             pipes={pipes}
@@ -835,6 +907,7 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
               mapRef.current = map;
             }}
           />
+          )}
 
           {/* Floating prompt shown during pipe-draw mode after the first node is clicked */}
           {drawMode === "pipe" && pipeFirstNodeId && (
