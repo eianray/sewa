@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 export default function Home() {
   const [session, setSession] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -25,14 +26,15 @@ export default function Home() {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      password,
     });
     if (error) {
       setMessage(`Error: ${error.message}`);
     } else {
-      setMessage("Check your email for the magic link!");
+      setMessage("Signed in! Redirecting...");
+      window.location.href = "/";
     }
     setLoading(false);
   };
@@ -108,12 +110,21 @@ export default function Home() {
               required
               className="w-full px-4 py-3 rounded-lg bg-[#111827] border border-[#1e293b] text-white placeholder-[#475569] focus:outline-none focus:border-[#38bdf8]"
             />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Password"
+              required
+              minLength={6}
+              className="w-full px-4 py-3 rounded-lg bg-[#111827] border border-[#1e293b] text-white placeholder-[#475569] focus:outline-none focus:border-[#38bdf8]"
+            />
             <button
               type="submit"
               disabled={loading}
               className="w-full py-3 px-4 rounded-lg bg-[#38bdf8] text-[#0a0f1e] font-semibold hover:bg-[#0ea5e9] transition-colors disabled:opacity-50"
             >
-              {loading ? "Sending..." : "Send Magic Link"}
+              {loading ? "Signing in..." : "Sign In"}
             </button>
           </form>
 
