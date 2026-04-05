@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { DrawMode, NodeType, BasemapType, LayerVisibility } from "@/types/network";
-import FacilityPalette from "@/components/FacilityPalette";
 import type { FeatureCollection } from "geojson";
 import type { NetworkNode, NetworkPipe } from "@/types/network";
 import type { Facility } from "@/types/facility";
@@ -469,12 +468,6 @@ export default function ElementPalette({
       )}
 
       {/* Facilities */}
-      <FacilityPalette
-        facilities={facilities ?? []}
-        onAddFacilityClick={() => onDrawModeChange("facility")}
-        onFacilityAdd={() => {}}
-      />
-
       {/* ── Hidden file inputs ─────────────────────────────────────────── */}
       {(["nodes", "pipes", "basins", "facilities"] as LayerKey[]).map((layer) => (
         <input
