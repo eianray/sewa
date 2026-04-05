@@ -245,11 +245,7 @@ export default function MapCanvas({
       if (nodeMarkersRef.current.has(node.id)) {
         const marker = nodeMarkersRef.current.get(node.id)!;
         marker.setIcon(icon);
-        if (layerVisibility.labels) {
-          marker.setTooltipContent(node.label || node.type);
-        } else {
-          marker.setTooltipContent("");
-        }
+        marker.setTooltipContent(node.label || node.type);
       } else {
         const marker = L.marker([node.lat, node.lng], { icon })
           .addTo(map)
@@ -265,7 +261,7 @@ export default function MapCanvas({
         nodeMarkersRef.current.set(node.id, marker);
       }
     });
-  }, [nodes, selectedId, selectedType, layerVisibility.labels, pipeFromNodeId]);
+  }, [nodes, selectedId, selectedType, pipeFromNodeId]);
 
   // Render pipes
   useEffect(() => {

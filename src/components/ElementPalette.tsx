@@ -153,7 +153,7 @@ export default function ElementPalette({
         </h3>
         <div className="space-y-2">
           {/* Layer toggles */}
-          {(["nodes", "pipes", "labels"] as const).map((layer) => {
+          {(["nodes", "pipes"] as const).map((layer) => {
             const isOn = layerVisibility[layer];
             return (
               <button

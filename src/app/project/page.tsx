@@ -60,7 +60,6 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
   const [layerVisibility, setLayerVisibility] = useState<LayerVisibility>({
     nodes: true,
     pipes: true,
-    labels: true,
   });
   const [basemap, setBasemap] = useState<BasemapType>("street");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -313,10 +312,35 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
   const handleImportFacilities = useCallback(async (importedFacilities: Facility[]) => {
     if (!session) return;
     const userId = session.user.id;
-    const inserts = importedFacilities.map((f) => ({ ...f, user_id: userId }));
+
+    // Get existing facility count to generate unique IDs
+    const { data: existing } = await supabase
+      .from('network_facilities')
+      .select('facility_id')
+      .eq('project_id', projectId)
+      .order('facility_id', { ascending: false })
+      .limit(1);
+    const lastIdx = existing?.[0]
+      ? parseInt(existing[0].facility_id.replace('FAC-', ''), 10) || 0
+      : 0;
+
+    const inserts = importedFacilities.map((f, i) => ({
+      ...f,
+      project_id: projectId,
+      user_id: userId,
+      facility_id: f.facility_id || `FAC-${String(lastIdx + i + 1).padStart(3, '0')}`,
+    }));
+
     const { data, error } = await supabase.from('network_facilities').insert(inserts).select();
-    if (error) { console.error('[SEWA] handleImportFacilities:', error.message); return; }
-    if (data) setFacilities((prev) => [...prev, ...(data as Facility[])]);
+    if (error) { console.error('[SEWA] handleImportFacilities:', error.message); alert(`Import failed: ${error.message}`); return; }
+    if (data) {
+      const mapped = data.map((f: Record<string, unknown>) => ({
+        ...f,
+        remaining_cfs: (Number(f.capacity_cfs) || 0) - (Number(f.allocated_cfs) || 0),
+        remaining_mgd: (Number(f.capacity_mgd) || 0) - (Number(f.allocated_mgd) || 0),
+      }));
+      setFacilities((prev) => [...prev, ...mapped as Facility[]]);
+    }
     markUnsaved();
   }, [session, projectId]);
 

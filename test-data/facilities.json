@@ -5,13 +5,16 @@
       "type": "Feature",
       "geometry": {
         "type": "Point",
-        "coordinates": [-123.8401, 47.7838]
+        "coordinates": [
+          -123.8401,
+          47.7838
+        ]
       },
       "properties": {
         "facility_id": "FAC-001",
         "name": "Gault's Gulch WWTP",
         "facility_type": "wwtp",
-        "capacity_cfs": 3.0,
+        "capacity_cfs": 3,
         "capacity_mgd": 1.94,
         "allocated_cfs": 0.5,
         "allocated_mgd": 0.32
@@ -21,11 +24,14 @@
       "type": "Feature",
       "geometry": {
         "type": "Point",
-        "coordinates": [-123.8385, 47.7942]
+        "coordinates": [
+          -123.8385,
+          47.7942
+        ]
       },
       "properties": {
         "facility_id": "FAC-002",
-        "name": "LS-01 (North Sump)",
+        "name": "LS-01 North Sump",
         "facility_type": "lift_station",
         "capacity_cfs": 1.5,
         "capacity_mgd": 0.97,
@@ -37,11 +43,14 @@
       "type": "Feature",
       "geometry": {
         "type": "Point",
-        "coordinates": [-123.8420, 47.7915]
+        "coordinates": [
+          -123.842,
+          47.7915
+        ]
       },
       "properties": {
         "facility_id": "FAC-003",
-        "name": "LS-02 (Ridge Saddle)",
+        "name": "LS-02 Ridge Saddle",
         "facility_type": "lift_station",
         "capacity_cfs": 0.8,
         "capacity_mgd": 0.52,

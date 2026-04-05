@@ -369,32 +369,54 @@ export default function ImportPanel({
           geojson = result.geojson;
           fields = result.fields;
         }
-        // Count existing facilities to generate FAC-XXX IDs
-        // We'll pass an offset hint via a marker element we can count
-        const startIdx = 0;
+        // facilities.json stores GeoJSON Point: coordinates = [lng, lat]
+        // If fields include lat/lng properties, use those; otherwise pull from geometry
         const facilities: Facility[] = geojson.features
           .filter((f) => f.geometry.type === 'Point' && f.properties)
           .map((f, i) => {
-            const idx = startIdx + i + 1;
             const rawType = facilityMapping.facility_type
               ? (f.properties?.[facilityMapping.facility_type] as string ?? 'other')
               : 'other';
             const type = normalizeFacilityType(rawType);
+            // Try property fields first; fall back to GeoJSON coordinates [lng, lat]
+            const lngProp = facilityMapping.lng ?? '';
+            const latProp = facilityMapping.lat ?? '';
+            const lng = lngProp
+              ? parseFloat(f.properties?.[lngProp] ?? '0')
+              : parseFloat(String((f.geometry as GeoJSON.Point).coordinates?.[0] ?? '0'));
+            const lat = latProp
+              ? parseFloat(f.properties?.[latProp] ?? '0')
+              : parseFloat(String((f.geometry as GeoJSON.Point).coordinates?.[1] ?? '0'));
+            const capCfs = facilityMapping.capacity_cfs
+              ? parseFloat(f.properties?.[facilityMapping.capacity_cfs] ?? '0') || 0
+              : parseFloat(String(f.properties?.['capacity_cfs'] ?? '0')) || 0;
+            const capMgd = facilityMapping.capacity_mgd
+              ? parseFloat(f.properties?.[facilityMapping.capacity_mgd] ?? '0') || 0
+              : parseFloat(String(f.properties?.['capacity_mgd'] ?? '0')) || 0;
+            const allocCfs = facilityMapping.allocated_cfs
+              ? parseFloat(f.properties?.[facilityMapping.allocated_cfs] ?? '0') || 0
+              : parseFloat(String(f.properties?.['allocated_cfs'] ?? '0')) || 0;
+            const allocMgd = facilityMapping.allocated_mgd
+              ? parseFloat(f.properties?.[facilityMapping.allocated_mgd] ?? '0') || 0
+              : parseFloat(String(f.properties?.['allocated_mgd'] ?? '0')) || 0;
+            const name = facilityMapping.name
+              ? (f.properties?.[facilityMapping.name] as string) ?? ''
+              : (f.properties?.['name'] as string) ?? '';
             return {
               id: crypto.randomUUID(),
               project_id: projectId,
               user_id: '',
-              facility_id: `FAC-${String(idx).padStart(3, '0')}`,
+              facility_id: f.properties?.['facility_id'] as string ?? '',
               facility_type: type,
-              name: (f.properties?.[facilityMapping.name ?? ''] as string) ?? `Facility ${idx}`,
-              lat: parseFloat(f.properties?.[facilityMapping.lat ?? ''] ?? '0'),
-              lng: parseFloat(f.properties?.[facilityMapping.lng ?? ''] ?? '0'),
-              capacity_cfs: facilityMapping.capacity_cfs ? parseFloat(f.properties?.[facilityMapping.capacity_cfs] ?? '0') || null : null,
-              capacity_mgd: facilityMapping.capacity_mgd ? parseFloat(f.properties?.[facilityMapping.capacity_mgd] ?? '0') || null : null,
-              allocated_cfs: facilityMapping.allocated_cfs ? parseFloat(f.properties?.[facilityMapping.allocated_cfs] ?? '0') || 0 : 0,
-              allocated_mgd: facilityMapping.allocated_mgd ? parseFloat(f.properties?.[facilityMapping.allocated_mgd] ?? '0') || 0 : 0,
-              remaining_cfs: 0,
-              remaining_mgd: 0,
+              name,
+              lat,
+              lng,
+              capacity_cfs: capCfs || null,
+              capacity_mgd: capMgd || null,
+              allocated_cfs: allocCfs,
+              allocated_mgd: allocMgd,
+              remaining_cfs: capCfs - allocCfs,
+              remaining_mgd: capMgd - allocMgd,
               properties: {},
               created_at: now,
             };
