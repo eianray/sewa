@@ -166,6 +166,23 @@ export default function ElementPalette({
     try {
       const buffer = await file.arrayBuffer();
       const data = await parseShpZip(buffer);
+
+      // Basins: no field mapping — just take the first polygon and replace boundary
+      if (layer === "basins") {
+        const geom = data.geometries.find((g) => g.type === "Polygon") as ShpPolygon | undefined;
+        if (!geom) throw new Error("No polygon found in shapefile");
+        const fc: FeatureCollection = {
+          type: "FeatureCollection",
+          features: [{
+            type: "Feature",
+            geometry: { type: "Polygon", coordinates: [geom.coords] },
+            properties: { label: file.name.replace(/\.zip$/i, "") },
+          }],
+        };
+        onImportBoundary(fc, file.name.replace(/\.zip$/i, ""));
+        return;
+      }
+
       setShpData(data);
       setPendingLayer(layer);
 
@@ -194,7 +211,7 @@ export default function ElementPalette({
     } catch (err) {
       setAppendError("Parse error: " + (err instanceof Error ? err.message : String(err)));
     }
-  }, []);
+  }, [onImportBoundary]);
 
   // ── Commit append after field mapping ──────────────────────────────────────
 
@@ -284,18 +301,6 @@ export default function ElementPalette({
           });
         if (imported.length) onAppendFacilities(imported);
 
-      } else if (pendingLayer === "basins") {
-        const geom = shpData.geometries.find((g) => g.type === "Polygon") as ShpPolygon | undefined;
-        if (!geom) throw new Error("No polygon found in shapefile");
-        const fc: FeatureCollection = {
-          type: "FeatureCollection",
-          features: [{
-            type: "Feature",
-            geometry: { type: "Polygon", coordinates: [geom.coords] },
-            properties: { label: "Boundary" },
-          }],
-        };
-        onImportBoundary(fc, "Imported Boundary");
       }
     } catch (err) {
       setAppendError(String(err));
@@ -398,7 +403,7 @@ export default function ElementPalette({
                           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
                             <path d="M6 1v7M3 5l3 3 3-3M1 10h10" />
                           </svg>
-                          Append Data
+                          {layer === "basins" ? "Replace Boundary" : "Append Data"}
                         </button>
                         <button
                           onClick={() => {
