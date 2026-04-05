@@ -44,7 +44,28 @@ function identifyGeometry(fc: FeatureCollection): "nodes" | "pipes" | "basins" {
   return "basins";
 }
 
+function shpReady() { return typeof window !== "undefined" && !!((window as unknown) as Record<string, unknown>)["shp"] && !!((window as unknown) as Record<string, unknown>)["JSZip"]; }
+
+async function loadShp(): Promise<void> {
+  if (shpReady()) return;
+  await new Promise<void>((resolve, reject) => {
+    const s1 = document.createElement("script");
+    s1.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+    s1.onload = () => {
+      const s2 = document.createElement("script");
+      s2.src = "https://cdnjs.cloudflare.com/ajax/libs/shpjs/4.0.0/shp.js";
+      s2.onload = () => resolve();
+      s2.onerror = () => reject(new Error("Failed to load shp.js"));
+      document.head.appendChild(s2);
+    };
+    s1.onerror = () => reject(new Error("Failed to load JSZip"));
+    document.head.appendChild(s1);
+  });
+}
+
 async function parseShapefileZip(file: File): Promise<{ geojson: FeatureCollection; fields: string[] }> {
+  // Ensure CDN scripts are loaded before trying to parse
+  await loadShp();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -52,9 +73,11 @@ async function parseShapefileZip(file: File): Promise<{ geojson: FeatureCollecti
         const buffer = e.target?.result as ArrayBuffer;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const win = window as any;
-        const shpFn = win["shp"] as (buf: ArrayBuffer, jszip?: unknown) => Promise<FeatureCollection>;
-        const JSZip = win["JSZip"] as (buf: ArrayBuffer) => Promise<unknown>;
-        shpFn(buffer, JSZip).then((geojson: FeatureCollection) => {
+        const shpFn = win["shp"];
+        const JSZipClass = win["JSZip"];
+        if (!shpFn || !JSZipClass) return reject(new Error("shp.js or JSZip not loaded"));
+        const jszipInstance = new JSZipClass();
+        shpFn(buffer, jszipInstance).then((geojson: FeatureCollection) => {
           const fields = new Set<string>();
           geojson.features.forEach((f) => {
             if (f.properties) Object.keys(f.properties).forEach((k) => fields.add(k));
@@ -65,7 +88,7 @@ async function parseShapefileZip(file: File): Promise<{ geojson: FeatureCollecti
         reject(err);
       }
     };
-    reader.onerror = reject;
+    reader.onerror = () => reject(new Error("FileReader error"));
     reader.readAsArrayBuffer(file);
   });
 }
@@ -298,7 +321,7 @@ export default function ImportPanel({
               parseShapefileZip(file).then(({ fields }) => {
                 setNodeFields(fields);
                 setNodeMapping(guessMapping(fields));
-              }).catch(() => {});
+              }).catch((e) => setError(`Could not read shapefile: ${e instanceof Error ? e.message : String(e)}`));
             }}
             className="hidden"
             id="node-upload"
@@ -339,7 +362,7 @@ export default function ImportPanel({
             accept=".zip"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) { setPipeFile(file); parseShapefileZip(file).then(({ fields }) => { setPipeFields(fields); setPipeMapping(guessMapping(fields)); }).catch(() => {}); }
+              if (file) { setPipeFile(file); parseShapefileZip(file).then(({ fields }) => { setPipeFields(fields); setPipeMapping(guessMapping(fields)); }).catch((e) => { setError(`Could not read shapefile: ${e instanceof Error ? e.message : String(e)}`); setPipeFile(null); }); }
             }}
             className="hidden"
             id="pipe-upload"
