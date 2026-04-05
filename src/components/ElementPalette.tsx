@@ -17,14 +17,16 @@ interface ElementPaletteProps {
   boundaryLabel: string | null;
   /** All existing nodes for label→ID lookups during pipe imports. */
   nodes: NetworkNode[];
-  facilities: Facility[];
+  /** All existing facilities (optional — for facilities count badge). */
+  facilities?: Facility[];
   onDrawModeChange: (mode: DrawMode) => void;
   onNodeTypeToAdd: (type: NodeType | null) => void;
   onLayerVisibilityChange: (layers: LayerVisibility) => void;
   onBasemapChange: (basemap: BasemapType) => void;
   onImportNodes: (nodes: NetworkNode[]) => void;
   onImportPipes: (pipes: NetworkPipe[]) => void;
-  onImportFacilities: (facilities: Facility[]) => void;
+  /** Optional — only needed if facilities import section should be shown. */
+  onImportFacilities?: (facilities: Facility[]) => void;
   onImportBoundary: (fc: FeatureCollection, label: string) => void;
   onClearBoundary: () => void;
   projectId: string;
@@ -222,7 +224,7 @@ export default function ElementPalette({
 
       {/* ── Facilities ─────────────────────────────────────────────── */}
       <FacilityPalette
-        facilities={facilities}
+        facilities={facilities ?? []}
         onAddFacilityClick={() => onDrawModeChange('facility')}
         onFacilityAdd={() => {}}
       />

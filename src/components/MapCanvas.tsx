@@ -16,7 +16,7 @@ interface MapCanvasProps {
   drawMode: DrawMode;
   nodeTypeToAdd: NodeType | null;
   selectedId: string | null;
-  selectedType: "node" | "pipe" | "facility" | null;
+  selectedType?: "node" | "pipe" | "facility" | null;
   layerVisibility: LayerVisibility;
   basemap: BasemapType;
   /** M4: GeoJSON FeatureCollection to render as the project boundary polygon. */
@@ -198,10 +198,10 @@ export default function MapCanvas({
     const map = mapRef.current;
     if (!map) return;
     const container = map.getContainer();
-    if (drawMode === "pipe" || drawMode === "node") {
-      container.classList.add("leaflet-crosshair");
+    if (drawMode === 'pipe' || drawMode === 'node' || drawMode === 'facility') {
+      container.classList.add('leaflet-crosshair');
     } else {
-      container.classList.remove("leaflet-crosshair");
+      container.classList.remove('leaflet-crosshair');
     }
     if (drawMode === "pipe") {
       map.dragging.disable();

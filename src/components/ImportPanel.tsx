@@ -10,7 +10,7 @@ interface ImportPanelProps {
   projectId: string;
   onImportNodes: (nodes: NetworkNode[]) => void;
   onImportPipes: (pipes: NetworkPipe[]) => void;
-  onImportFacilities: (facilities: Facility[]) => void;
+  onImportFacilities?: (facilities: Facility[]) => void;
   onImportBoundary: (fc: FeatureCollection, label: string) => void;
   onClearBoundary: () => void;
   boundaryLabel: string | null;
@@ -400,7 +400,7 @@ export default function ImportPanel({
             };
           })
           .filter((f) => f.lat !== 0 && f.lng !== 0);
-        if (facilities.length) onImportFacilities(facilities);
+        if (facilities.length) onImportFacilities?.(facilities);
         setFacilityFile(null); setFacilityFields([]); setFacilityMapping({});
       }
     } catch (err) {

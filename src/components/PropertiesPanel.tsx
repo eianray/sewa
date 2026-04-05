@@ -6,7 +6,7 @@ import { FACILITY_TYPE_LABELS } from "@/types/facility";
 
 interface PropertiesPanelProps {
   selected: NetworkNode | NetworkPipe | null;
-  selectedType: "node" | "pipe" | "facility" | null;
+  selectedType?: "node" | "pipe" | "facility" | null;
   selectedFacility?: Facility | null;
   nodes: NetworkNode[];
   /** GeoJSON FeatureCollection — required for Grab LIDAR to work */
