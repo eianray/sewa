@@ -3,8 +3,10 @@
 import { DrawMode, NodeType, BasemapType, LayerVisibility } from "@/types/network";
 import { NODE_COLORS } from "@/types/network";
 import ImportPanel from "@/components/ImportPanel";
-import type { FeatureCollection, Feature, GeoJsonProperties } from "geojson";
+import FacilityPalette from "@/components/FacilityPalette";
+import type { FeatureCollection } from "geojson";
 import type { NetworkNode, NetworkPipe } from "@/types/network";
+import type { Facility } from "@/types/facility";
 
 interface ElementPaletteProps {
   drawMode: DrawMode;
@@ -15,12 +17,14 @@ interface ElementPaletteProps {
   boundaryLabel: string | null;
   /** All existing nodes for label→ID lookups during pipe imports. */
   nodes: NetworkNode[];
+  facilities: Facility[];
   onDrawModeChange: (mode: DrawMode) => void;
   onNodeTypeToAdd: (type: NodeType | null) => void;
   onLayerVisibilityChange: (layers: LayerVisibility) => void;
   onBasemapChange: (basemap: BasemapType) => void;
   onImportNodes: (nodes: NetworkNode[]) => void;
   onImportPipes: (pipes: NetworkPipe[]) => void;
+  onImportFacilities: (facilities: Facility[]) => void;
   onImportBoundary: (fc: FeatureCollection, label: string) => void;
   onClearBoundary: () => void;
   projectId: string;
@@ -59,12 +63,14 @@ export default function ElementPalette({
   basemap,
   boundaryLabel,
   nodes,
+  facilities,
   onDrawModeChange,
   onNodeTypeToAdd,
   onLayerVisibilityChange,
   onBasemapChange,
   onImportNodes,
   onImportPipes,
+  onImportFacilities,
   onImportBoundary,
   onClearBoundary,
   projectId,
@@ -214,6 +220,13 @@ export default function ElementPalette({
         </div>
       )}
 
+      {/* ── Facilities ─────────────────────────────────────────────── */}
+      <FacilityPalette
+        facilities={facilities}
+        onAddFacilityClick={() => onDrawModeChange('facility')}
+        onFacilityAdd={() => {}}
+      />
+
       {/* ── Import Data (Nodes / Pipes / Basins) ────────────────────────── */}
       <ImportPanel
         projectId={projectId}
@@ -222,6 +235,7 @@ export default function ElementPalette({
         onImportPipes={onImportPipes}
         onImportBoundary={onImportBoundary}
         onClearBoundary={onClearBoundary}
+        onImportFacilities={onImportFacilities}
         boundaryLabel={boundaryLabel}
       />
     </aside>

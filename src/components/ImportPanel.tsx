@@ -3,11 +3,14 @@
 import { useState, useCallback } from "react";
 import type { FeatureCollection } from "geojson";
 import type { NetworkNode, NetworkPipe } from "@/types/network";
+import type { Facility, FacilityType } from "@/types/facility";
+import { FACILITY_TYPE_LABELS } from "@/types/facility";
 
 interface ImportPanelProps {
   projectId: string;
   onImportNodes: (nodes: NetworkNode[]) => void;
   onImportPipes: (pipes: NetworkPipe[]) => void;
+  onImportFacilities: (facilities: Facility[]) => void;
   onImportBoundary: (fc: FeatureCollection, label: string) => void;
   onClearBoundary: () => void;
   boundaryLabel: string | null;
@@ -27,6 +30,18 @@ interface FieldMapping {
   length_ft?: string;
   slope_pct?: string;
   material?: string;
+}
+
+interface FacilityFieldMapping {
+  facility_id?: string;
+  name?: string;
+  facility_type?: string;
+  lat?: string;
+  lng?: string;
+  capacity_cfs?: string;
+  capacity_mgd?: string;
+  allocated_cfs?: string;
+  allocated_mgd?: string;
 }
 
 interface ParseResult {
@@ -96,7 +111,6 @@ async function parseShapefileZip(file: File): Promise<{ geojson: FeatureCollecti
 function guessMapping(fields: string[]): FieldMapping {
   // Simple smart defaults: matches common shapefile field names to app fields
   const f = fields.map((s) => s.toLowerCase().replace(/[_\s-]/g, ""));
-  const has = (pat: string) => f.some((s) => s.includes(pat));
   const val = (pat: string) => fields.find((s) => s.toLowerCase().replace(/[_\s-]/g, "").includes(pat));
   return {
     label: val("uid") ?? val("unique_id") ?? val("label") ?? val("name") ?? val("id") ?? fields[0] ?? "",
@@ -111,6 +125,32 @@ function guessMapping(fields: string[]): FieldMapping {
     from_node_label: val("from") ?? val("from_node"),
     to_node_label: val("to") ?? val("to_node"),
   };
+}
+
+function guessFacilityMapping(fields: string[]): FacilityFieldMapping {
+  const val = (pat: string) => fields.find((s) => s.toLowerCase().replace(/[_\s-]/g, "").includes(pat));
+  return {
+    name: val("name") ?? val("facility") ?? val("label") ?? fields[0] ?? "",
+    facility_type: val("type") ?? val("facilitytype") ?? val("facility_type") ?? "",
+    lat: val("lat") ?? val("latitude") ?? val("y"),
+    lng: val("lng") ?? val("lon") ?? val("longitude") ?? val("x"),
+    capacity_cfs: val("capacity_cfs") ?? val("capacity") ?? val("cfs") ?? "",
+    capacity_mgd: val("capacity_mgd") ?? val("mgd") ?? "",
+    allocated_cfs: val("allocated_cfs") ?? val("allocated") ?? "",
+    allocated_mgd: val("allocated_mgd") ?? "",
+  };
+}
+
+const VALID_FACILITY_TYPES: FacilityType[] = ['wwtp', 'lift_station', 'cso', 'sso', 'outfall', 'other'];
+
+function normalizeFacilityType(raw: string): FacilityType {
+  const lower = raw.toLowerCase().replace(/[_\s-]/g, '');
+  if (lower.includes('wwtp') || lower.includes('treatment')) return 'wwtp';
+  if (lower.includes('lift') || lower.includes('pump')) return 'lift_station';
+  if (lower === 'cso') return 'cso';
+  if (lower === 'sso') return 'sso';
+  if (lower.includes('outfall')) return 'outfall';
+  return 'other';
 }
 
 function FieldSelect({
@@ -175,6 +215,7 @@ export default function ImportPanel({
   projectId,
   onImportNodes,
   onImportPipes,
+  onImportFacilities,
   onImportBoundary,
   onClearBoundary,
   boundaryLabel,
@@ -199,24 +240,52 @@ export default function ImportPanel({
   const [basinFile, setBasinFile] = useState<File | null>(null);
   const [basinName, setBasinName] = useState("");
 
+  // ── Facilities ─────────────────────────────────────────────────────────────
+  const [facilityFile, setFacilityFile] = useState<File | null>(null);
+  const [facilityFields, setFacilityFields] = useState<string[]>([]);
+  const [facilityMapping, setFacilityMapping] = useState<FacilityFieldMapping>({});
+
   // ── Field change helpers ───────────────────────────────────────────────────
   const setMap = (setter: React.Dispatch<React.SetStateAction<FieldMapping>>, key: keyof FieldMapping, v: string) =>
     setter((prev) => ({ ...prev, [key]: v }));
+  const setFacilityMap = (key: keyof FacilityFieldMapping, v: string) =>
+    setFacilityMapping((prev) => ({ ...prev, [key]: v }));
 
   // ── File drop handler ─────────────────────────────────────────────────────
   const handleDrop = useCallback(
-    async (e: React.DragEvent<HTMLDivElement>, type: "nodes" | "pipes" | "basins") => {
+    async (e: React.DragEvent<HTMLDivElement>, type: "nodes" | "pipes" | "basins" | "facilities") => {
       e.preventDefault();
       const file = e.dataTransfer.files[0];
       if (!file) return;
-      if (!file.name.endsWith(".zip")) { setError("Please upload a .zip of a shapefile."); return; }
       setError(null);
       setUploading(true);
       try {
+        // Facilities can be GeoJSON (.json) or shapefile (.zip)
+        if (type === 'facilities' && file.name.endsWith('.json')) {
+          const text = await file.text();
+          const geojson = JSON.parse(text) as FeatureCollection;
+          const fields = new Set<string>();
+          geojson.features.forEach((f) => {
+            if (f.properties) Object.keys(f.properties).forEach((k) => fields.add(k));
+          });
+          const fieldArr = Array.from(fields).sort();
+          setFacilityFile(file);
+          setFacilityFields(fieldArr);
+          setFacilityMapping(guessFacilityMapping(fieldArr));
+          setUploading(false);
+          return;
+        }
+        if (!file.name.endsWith('.zip')) { setError('Please upload a .zip shapefile or .json GeoJSON file.'); setUploading(false); return; }
         const { geojson, fields } = await parseShapefileZip(file);
         const guess = guessMapping(fields);
-        if (type === "nodes") { setNodeFile(file); setNodeFields(fields); setNodeMapping(guess); }
-        else if (type === "pipes") { setPipeFile(file); setPipeFields(fields); setPipeMapping(guess); }
+        if (type === 'nodes') { setNodeFile(file); setNodeFields(fields); setNodeMapping(guess); }
+        else if (type === 'pipes') { setPipeFile(file); setPipeFields(fields); setPipeMapping(guess); }
+        else if (type === 'facilities') {
+          const fieldArr = fields.sort();
+          setFacilityFile(file);
+          setFacilityFields(fieldArr);
+          setFacilityMapping(guessFacilityMapping(fieldArr));
+        }
         else { setBasinFile(file); }
       } catch (err) {
         setError(`Parse error: ${err instanceof Error ? err.message : String(err)}`);
@@ -287,10 +356,57 @@ export default function ImportPanel({
         onImportBoundary(geojson, label);
         setBasinFile(null); setBasinName("");
       }
+      // Facilities
+      if (facilityFile) {
+        let geojson: FeatureCollection;
+        let fields: string[];
+        if (facilityFile.name.endsWith('.json')) {
+          const text = await facilityFile.text();
+          geojson = JSON.parse(text) as FeatureCollection;
+          fields = Array.from(new Set(geojson.features.flatMap((f) => f.properties ? Object.keys(f.properties) : []))).sort();
+        } else {
+          const result = await parseShapefileZip(facilityFile);
+          geojson = result.geojson;
+          fields = result.fields;
+        }
+        // Count existing facilities to generate FAC-XXX IDs
+        // We'll pass an offset hint via a marker element we can count
+        const startIdx = 0;
+        const facilities: Facility[] = geojson.features
+          .filter((f) => f.geometry.type === 'Point' && f.properties)
+          .map((f, i) => {
+            const idx = startIdx + i + 1;
+            const rawType = facilityMapping.facility_type
+              ? (f.properties?.[facilityMapping.facility_type] as string ?? 'other')
+              : 'other';
+            const type = normalizeFacilityType(rawType);
+            return {
+              id: crypto.randomUUID(),
+              project_id: projectId,
+              user_id: '',
+              facility_id: `FAC-${String(idx).padStart(3, '0')}`,
+              facility_type: type,
+              name: (f.properties?.[facilityMapping.name ?? ''] as string) ?? `Facility ${idx}`,
+              lat: parseFloat(f.properties?.[facilityMapping.lat ?? ''] ?? '0'),
+              lng: parseFloat(f.properties?.[facilityMapping.lng ?? ''] ?? '0'),
+              capacity_cfs: facilityMapping.capacity_cfs ? parseFloat(f.properties?.[facilityMapping.capacity_cfs] ?? '0') || null : null,
+              capacity_mgd: facilityMapping.capacity_mgd ? parseFloat(f.properties?.[facilityMapping.capacity_mgd] ?? '0') || null : null,
+              allocated_cfs: facilityMapping.allocated_cfs ? parseFloat(f.properties?.[facilityMapping.allocated_cfs] ?? '0') || 0 : 0,
+              allocated_mgd: facilityMapping.allocated_mgd ? parseFloat(f.properties?.[facilityMapping.allocated_mgd] ?? '0') || 0 : 0,
+              remaining_cfs: 0,
+              remaining_mgd: 0,
+              properties: {},
+              created_at: now,
+            };
+          })
+          .filter((f) => f.lat !== 0 && f.lng !== 0);
+        if (facilities.length) onImportFacilities(facilities);
+        setFacilityFile(null); setFacilityFields([]); setFacilityMapping({});
+      }
     } catch (err) {
       setError(`Upload error: ${err instanceof Error ? err.message : String(err)}`);
     } finally { setUploading(false); }
-  }, [nodeFile, nodeMapping, nodeName, pipeFile, pipeMapping, pipeName, basinFile, basinName, projectId, onImportNodes, onImportPipes, onImportBoundary]);
+  }, [nodeFile, nodeMapping, nodeName, pipeFile, pipeMapping, pipeName, basinFile, basinName, facilityFile, facilityMapping, projectId, onImportNodes, onImportPipes, onImportFacilities, onImportBoundary]);
 
   return (
     <div className="border-b border-[#1e293b] p-3 space-y-2">
@@ -437,6 +553,69 @@ export default function ImportPanel({
             Remove {boundaryLabel}
           </button>
         )}
+      </Section>
+
+      {/* ── Facilities ──────────────────────────────────────────────────── */}
+      <Section title="Facilities" color="#a855f7">
+        <div
+          onDrop={(e) => handleDrop(e, "facilities")}
+          onDragOver={(e) => e.preventDefault()}
+          className="border-2 border-dashed border-[#1e293b] rounded-lg p-3 text-center mb-2 cursor-pointer hover:border-[#a855f7]/50 transition-colors"
+        >
+          <input
+            type="file"
+            accept=".zip,.json"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              if (file.name.endsWith('.json')) {
+                file.text().then((text) => {
+                  try {
+                    const geojson = JSON.parse(text) as FeatureCollection;
+                    const fields = Array.from(new Set(geojson.features.flatMap((f) => f.properties ? Object.keys(f.properties) : []))).sort();
+                    setFacilityFile(file);
+                    setFacilityFields(fields);
+                    setFacilityMapping(guessFacilityMapping(fields));
+                  } catch {
+                    setError('Invalid GeoJSON file');
+                  }
+                }).catch(() => setError('Could not read file'));
+              } else {
+                setFacilityFile(file);
+                parseShapefileZip(file).then(({ fields }) => {
+                  setFacilityFields(fields.sort());
+                  setFacilityMapping(guessFacilityMapping(fields));
+                }).catch((e) => { setError(`Could not read shapefile: ${e instanceof Error ? e.message : String(e)}`); setFacilityFile(null); });
+              }
+            }}
+            className="hidden"
+            id="facility-upload"
+          />
+          <label htmlFor="facility-upload" className="cursor-pointer">
+            <div className="text-xs text-[#94a3b8] mb-1">Drop .shp zip or .json GeoJSON</div>
+            {facilityFile && <div className="text-xs text-[#a855f7] font-medium truncate">{facilityFile.name}</div>}
+          </label>
+        </div>
+        {facilityFields.length > 0 && (
+          <div className="space-y-1 mb-2">
+            <p className="text-xs text-[#94a3b8] font-medium">Map fields:</p>
+            <FieldSelect label="Name" value={facilityMapping.name ?? ""} fields={facilityFields} onChange={(v) => setFacilityMap("name", v)} />
+            <FieldSelect label="Type" value={facilityMapping.facility_type ?? ""} fields={facilityFields} onChange={(v) => setFacilityMap("facility_type", v)} />
+            <FieldSelect label="Latitude" value={facilityMapping.lat ?? ""} fields={facilityFields} onChange={(v) => setFacilityMap("lat", v)} />
+            <FieldSelect label="Longitude" value={facilityMapping.lng ?? ""} fields={facilityFields} onChange={(v) => setFacilityMap("lng", v)} />
+            <FieldSelect label="Capacity cfs" value={facilityMapping.capacity_cfs ?? ""} fields={facilityFields} onChange={(v) => setFacilityMap("capacity_cfs", v)} />
+            <FieldSelect label="Capacity mgd" value={facilityMapping.capacity_mgd ?? ""} fields={facilityFields} onChange={(v) => setFacilityMap("capacity_mgd", v)} />
+            <FieldSelect label="Allocated cfs" value={facilityMapping.allocated_cfs ?? ""} fields={facilityFields} onChange={(v) => setFacilityMap("allocated_cfs", v)} />
+            <FieldSelect label="Allocated mgd" value={facilityMapping.allocated_mgd ?? ""} fields={facilityFields} onChange={(v) => setFacilityMap("allocated_mgd", v)} />
+          </div>
+        )}
+        <button
+          onClick={handleUpload}
+          disabled={uploading || !facilityFile}
+          className="w-full rounded bg-[#a855f7] text-white py-1.5 text-xs font-bold hover:bg-[#9333ea] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          {uploading ? 'Processing…' : 'Upload Facilities'}
+        </button>
       </Section>
     </div>
   );

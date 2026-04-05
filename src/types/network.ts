@@ -1,3 +1,5 @@
+export type LayerType = "node" | "pipe" | "facility";
+
 export type NodeType = "manhole" | "inlet" | "outlet" | "junction" | "lift_station";
 
 export interface NetworkNode {
@@ -31,7 +33,9 @@ export interface NetworkPipe {
   created_at: string;
 }
 
-export type DrawMode = "none" | "node" | "pipe";
+export { type Facility } from './facility';
+
+export type DrawMode = "none" | "node" | "pipe" | "facility";
 export type BasemapType =
   | "street"
   | "satellite"

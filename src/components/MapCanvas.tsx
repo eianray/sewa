@@ -7,14 +7,16 @@ import "leaflet/dist/leaflet.css";
 import type { FeatureCollection } from "geojson";
 import type { NetworkNode, NetworkPipe, NodeType, DrawMode, BasemapType, LayerVisibility } from "@/types/network";
 import { NODE_COLORS } from "@/types/network";
+import type { Facility } from "@/types/facility";
 
 interface MapCanvasProps {
   nodes: NetworkNode[];
   pipes: NetworkPipe[];
+  facilities?: Facility[];
   drawMode: DrawMode;
   nodeTypeToAdd: NodeType | null;
   selectedId: string | null;
-  selectedType: "node" | "pipe" | null;
+  selectedType: "node" | "pipe" | "facility" | null;
   layerVisibility: LayerVisibility;
   basemap: BasemapType;
   /** M4: GeoJSON FeatureCollection to render as the project boundary polygon. */
@@ -24,6 +26,7 @@ interface MapCanvasProps {
   pipeFromNodeId?: string | null;
   onNodeClick: (node: NetworkNode, e: L.LeafletMouseEvent) => void;
   onPipeClick: (pipe: NetworkPipe, e: L.LeafletMouseEvent) => void;
+  onFacilityClick?: (facility: Facility, e: L.LeafletMouseEvent) => void;
   onMapReady?: (map: L.Map) => void;
 }
 
@@ -63,6 +66,20 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
+function createFacilityIcon(facility: Facility, isSelected: boolean): L.DivIcon {
+  const color = isSelected ? '#F97316' : '#3B82F6';
+  const size = isSelected ? 20 : 16;
+  const shadow = isSelected
+    ? '0 0 0 3px rgba(249,115,22,0.4), 0 0 10px rgba(249,115,22,0.4)'
+    : '0 0 6px rgba(0,0,0,0.5)';
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:${size}px;height:${size}px;background:${color};border:2px solid rgba(255,255,255,0.8);border-radius:4px;box-shadow:${shadow};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;line-height:1;">🏭</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
 function createNodeIcon(type: NodeType, isSelected: boolean, isPipeFrom: boolean): L.DivIcon {
   const color = NODE_COLORS[type];
   const size = isSelected ? 20 : 16;
@@ -82,6 +99,7 @@ function createNodeIcon(type: NodeType, isSelected: boolean, isPipeFrom: boolean
 export default function MapCanvas({
   nodes,
   pipes,
+  facilities = [],
   drawMode,
   nodeTypeToAdd,
   selectedId,
@@ -93,12 +111,14 @@ export default function MapCanvas({
   pipeFromNodeId,
   onNodeClick,
   onPipeClick,
+  onFacilityClick,
   onMapReady,
 }: MapCanvasProps) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const nodeMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const pipeLinesRef = useRef<Map<string, L.Polyline>>(new Map());
+  const facilityMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const tileLayerRef = useRef<L.TileLayer | null>(null);
   const boundaryLayerRef = useRef<L.GeoJSON | null>(null);
 
@@ -108,13 +128,17 @@ export default function MapCanvas({
   const onMapClickRef = useRef(onMapClick);
   const onNodeClickRef = useRef(onNodeClick);
   const onPipeClickRef = useRef(onPipeClick);
+  const onFacilityClickRef = useRef(onFacilityClick);
   const drawModeRef = useRef(drawMode);
   const nodesRef = useRef(nodes);
+  const facilitiesRef = useRef(facilities);
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
   useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
   useEffect(() => { onPipeClickRef.current = onPipeClick; }, [onPipeClick]);
+  useEffect(() => { onFacilityClickRef.current = onFacilityClick; }, [onFacilityClick]);
   useEffect(() => { drawModeRef.current = drawMode; }, [drawMode]);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { facilitiesRef.current = facilities; }, [facilities]);
 
   // Initialize map
   useEffect(() => {
@@ -294,6 +318,45 @@ export default function MapCanvas({
     });
   }, [pipes, nodes, selectedId, selectedType, onPipeClick]);
 
+  // Render facilities
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const currentIds = new Set(facilities.map((f) => f.id));
+
+    facilityMarkersRef.current.forEach((marker, id) => {
+      if (!currentIds.has(id)) {
+        marker.remove();
+        facilityMarkersRef.current.delete(id);
+      }
+    });
+
+    facilities.forEach((facility) => {
+      const isSelected = selectedType === 'facility' && selectedId === facility.id;
+      const icon = createFacilityIcon(facility, isSelected);
+
+      if (facilityMarkersRef.current.has(facility.id)) {
+        const marker = facilityMarkersRef.current.get(facility.id)!;
+        marker.setIcon(icon);
+        marker.setTooltipContent(facility.name || facility.facility_id);
+      } else {
+        const marker = L.marker([facility.lat, facility.lng], { icon })
+          .addTo(map)
+          .bindTooltip(facility.name || facility.facility_id, {
+            permanent: false,
+            direction: 'top',
+            className: 'sewa-tooltip',
+          });
+        marker.on('click', (e: L.LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(e);
+          onFacilityClickRef.current?.(facility, e);
+        });
+        facilityMarkersRef.current.set(facility.id, marker);
+      }
+    });
+  }, [facilities, selectedId, selectedType]);
+
   // Toggle layer visibility
   useEffect(() => {
     nodeMarkersRef.current.forEach((marker) => {
@@ -310,6 +373,10 @@ export default function MapCanvas({
         line.remove();
       }
     });
+    return () => {
+      facilityMarkersRef.current.forEach((m) => m.remove());
+      facilityMarkersRef.current.clear();
+    };
   }, [layerVisibility]);
 
   // Render boundary polygon

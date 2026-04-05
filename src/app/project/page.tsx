@@ -6,11 +6,15 @@ import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase";
 import type { Project } from "@/types/project";
 import type { NetworkNode, NetworkPipe, NodeType, DrawMode, BasemapType, LayerVisibility } from "@/types/network";
+import type { Facility } from "@/types/facility";
+import { FACILITY_TYPE_LABELS } from "@/types/facility";
 import type { SimulationResult } from "@/lib/simulation";
 import { loadDemTile } from "@/lib/demSampler";
 import { DEFAULT_BURIAL_DEPTH_FT } from "@/lib/lidarElevation";
 import { runSimulation } from "@/lib/simulation";
 import ElementPalette from "@/components/ElementPalette";
+import FacilityPalette from "@/components/FacilityPalette";
+import { AddFacilityModal } from "@/components/FacilityPalette";
 import SimulationPanel from "@/components/SimulationPanel";
 import PropertiesPanel from "@/components/PropertiesPanel";
 import type L from "leaflet";
@@ -60,7 +64,7 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
   });
   const [basemap, setBasemap] = useState<BasemapType>("street");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedType, setSelectedType] = useState<"node" | "pipe" | null>(null);
+  const [selectedType, setSelectedType] = useState<"node" | "pipe" | "facility" | null>(null);
   const [pipeFirstNodeId, setPipeFirstNodeId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [boundaryGeoJSON, setBoundaryGeoJSON] = useState<FeatureCollection | null>(null);
@@ -70,6 +74,10 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
   const [simulationLoading, setSimulationLoading] = useState(false);
   const [showSimulation, setShowSimulation] = useState(false);
   const [grabbingLidar, setGrabbingLidar] = useState(false);
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [selectedFacility, setSelectedFacility] = useState<Facility | null>(null);
+  const [showAddFacilityModal, setShowAddFacilityModal] = useState(false);
+  const [pendingFacilityLocation, setPendingFacilityLocation] = useState<{ lat: number; lng: number } | null>(null);
 
 
   const mapRef = useRef<L.Map | null>(null);
@@ -89,14 +97,16 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
 
   async function fetchData(userId: string) {
     setLoading(true);
-    const [{ data: proj }, { data: nodeData }, { data: pipeData }] = await Promise.all([
+    const [{ data: proj }, { data: nodeData }, { data: pipeData }, { data: facilityData }] = await Promise.all([
       supabase.from("projects").select("*").eq("id", projectId).single(),
       supabase.from("network_nodes").select("*").eq("project_id", projectId).eq("user_id", userId),
       supabase.from("network_pipes").select("*").eq("project_id", projectId).eq("user_id", userId),
+      supabase.from("network_facilities").select("*").eq("project_id", projectId).eq("user_id", userId).order("facility_id"),
     ]);
     if (proj) setProject(proj as Project);
     setNodes((nodeData as NetworkNode[]) || []);
     setPipes((pipeData as NetworkPipe[]) || []);
+    setFacilities((facilityData as Facility[]) || []);
     const projRecord = proj as Project | null;
     if (projRecord?.boundary_geojson) setBoundaryGeoJSON(projRecord.boundary_geojson as FeatureCollection);
     if (projRecord?.boundary_label) setBoundaryLabel(projRecord.boundary_label);
@@ -113,14 +123,22 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
 
   const handleMapClick = useCallback(
     async (lat: number, lng: number) => {
-      if (!session || drawMode !== "node" || !nodeTypeToAdd) return;
-      const { data, error } = await supabase
-        .from("network_nodes")
-        .insert({ project_id: projectId, user_id: session.user.id, type: nodeTypeToAdd, lat, lng, label: "" })
-        .select()
-        .single();
-      if (!error && data) setNodes((prev) => [...prev, data as NetworkNode]);
-      markUnsaved();
+      if (!session) return;
+      if (drawMode === 'node' && nodeTypeToAdd) {
+        const { data, error } = await supabase
+          .from('network_nodes')
+          .insert({ project_id: projectId, user_id: session.user.id, type: nodeTypeToAdd, lat, lng, label: '' })
+          .select()
+          .single();
+        if (!error && data) setNodes((prev) => [...prev, data as NetworkNode]);
+        markUnsaved();
+        return;
+      }
+      if (drawMode === 'facility') {
+        setPendingFacilityLocation({ lat, lng });
+        setShowAddFacilityModal(true);
+        return;
+      }
     },
     [session, drawMode, nodeTypeToAdd, projectId]
   );
@@ -229,6 +247,78 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
     if (selectedId === id) { setSelectedId(null); setSelectedType(null); }
     markUnsaved();
   }, [selectedId]);
+
+  // Facility handlers
+  const handleFacilityClick = useCallback(
+    async (_facility: Facility, _e: L.LeafletMouseEvent) => {
+      if (drawMode !== 'facility') {
+        const f = facilities.find((f) => f.id === _facility.id);
+        setSelectedId(_facility.id);
+        setSelectedType('facility');
+        setSelectedFacility(f ?? null);
+      }
+    },
+    [drawMode, facilities]
+  );
+
+  const handleAddFacility = useCallback(
+    async (location: { lat: number; lng: number }, data: { name: string; facility_type: Facility['facility_type'] }) => {
+      if (!session) return;
+      const facilityId = `FAC-${String(facilities.length + 1).padStart(3, '0')}`;
+      const { data: newFacility, error } = await supabase
+        .from('network_facilities')
+        .insert({
+          project_id: projectId,
+          user_id: session.user.id,
+          facility_id: facilityId,
+          facility_type: data.facility_type,
+          name: data.name,
+          lat: location.lat,
+          lng: location.lng,
+          allocated_cfs: 0,
+          allocated_mgd: 0,
+          properties: {},
+        })
+        .select()
+        .single();
+      if (error) { console.error('[SEWA] handleAddFacility:', error.message); return; }
+      if (newFacility) {
+        setFacilities((prev) => [...prev, newFacility as Facility]);
+        setSelectedId(newFacility.id);
+        setSelectedType('facility');
+        setSelectedFacility(newFacility as Facility);
+      }
+      setShowAddFacilityModal(false);
+      setPendingFacilityLocation(null);
+      setDrawMode('none');
+      markUnsaved();
+    },
+    [session, facilities, projectId]
+  );
+
+  const handleUpdateFacility = useCallback(async (id: string, updates: Partial<Facility>) => {
+    setFacilities((prev) => prev.map((f) => (f.id === id ? { ...f, ...updates } : f)));
+    setSelectedFacility((prev) => prev ? { ...prev, ...updates } : null);
+    await supabase.from('network_facilities').update(updates).eq('id', id);
+    markUnsaved();
+  }, []);
+
+  const handleDeleteFacility = useCallback(async (id: string) => {
+    await supabase.from('network_facilities').delete().eq('id', id);
+    setFacilities((prev) => prev.filter((f) => f.id !== id));
+    if (selectedId === id) { setSelectedId(null); setSelectedType(null); setSelectedFacility(null); }
+    markUnsaved();
+  }, [selectedId]);
+
+  const handleImportFacilities = useCallback(async (importedFacilities: Facility[]) => {
+    if (!session) return;
+    const userId = session.user.id;
+    const inserts = importedFacilities.map((f) => ({ ...f, user_id: userId }));
+    const { data, error } = await supabase.from('network_facilities').insert(inserts).select();
+    if (error) { console.error('[SEWA] handleImportFacilities:', error.message); return; }
+    if (data) setFacilities((prev) => [...prev, ...(data as Facility[])]);
+    markUnsaved();
+  }, [session, projectId]);
 
   // Grab elevation from LIDAR for a single node — fetches tile from USGS WCS using project bbox
   const handleGrabLidar = useCallback(async (nodeId: string, lat: number, lng: number) => {
@@ -355,7 +445,8 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
           layerVisibility={layerVisibility} basemap={basemap}
           boundaryLabel={boundaryLabel}
           nodes={nodes}
-          onDrawModeChange={(mode) => { setDrawMode(mode); if (mode !== "pipe") setPipeFirstNodeId(null); }}
+          facilities={facilities}
+          onDrawModeChange={(mode) => { setDrawMode(mode); if (mode !== 'pipe') setPipeFirstNodeId(null); }}
           onNodeTypeToAdd={setNodeTypeToAdd}
           onLayerVisibilityChange={setLayerVisibility}
           onBasemapChange={setBasemap}
@@ -363,11 +454,13 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
           onImportPipes={handleImportPipes}
           onImportBoundary={handleImportBoundary}
           onClearBoundary={handleClearBoundary}
+          onImportFacilities={handleImportFacilities}
           projectId={projectId}
         />
         <div className="flex-1 relative">
           <MapCanvas
             nodes={nodes} pipes={pipes}
+            facilities={facilities}
             drawMode={drawMode} nodeTypeToAdd={nodeTypeToAdd}
             selectedId={selectedId} selectedType={selectedType}
             layerVisibility={layerVisibility} basemap={basemap}
@@ -375,29 +468,53 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
             onMapClick={handleMapClick}
             onNodeClick={handleNodeClick}
             onPipeClick={handlePipeClick}
+            onFacilityClick={handleFacilityClick}
             onMapReady={(map) => { mapRef.current = map; }}
           />
-          {drawMode === "pipe" && pipeFirstNodeId && (
+          {drawMode === 'pipe' && pipeFirstNodeId && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-[#38bdf8] text-[#0a0f1e] text-xs font-semibold rounded-full px-4 py-1.5 shadow-lg z-[1000]">
               Click second node to complete pipe
+            </div>
+          )}
+          {drawMode === 'facility' && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-[#3b82f6] text-white text-xs font-semibold rounded-full px-4 py-1.5 shadow-lg z-[1000]">
+              Click map to place facility
+              <button
+                onClick={() => setDrawMode('none')}
+                className="ml-2 underline hover:no-underline"
+              >
+                Cancel
+              </button>
             </div>
           )}
         </div>
         <PropertiesPanel
           selected={selectedElement as NetworkNode | NetworkPipe | null}
           selectedType={selectedType}
+          selectedFacility={selectedFacility}
           nodes={nodes}
           boundaryGeoJSON={boundaryGeoJSON}
           onUpdateNode={handleUpdateNode}
           onUpdatePipe={handleUpdatePipe}
+          onUpdateFacility={handleUpdateFacility}
           onDeleteNode={handleDeleteNode}
           onDeletePipe={handleDeletePipe}
-          onClose={() => { setSelectedId(null); setSelectedType(null); }}
+          onDeleteFacility={handleDeleteFacility}
+          onClose={() => { setSelectedId(null); setSelectedType(null); setSelectedFacility(null); }}
           onGrabLidar={handleGrabLidar}
           grabbingLidar={grabbingLidar}
           onAutoSlope={handleAutoSlope}
         />
       </div>
+      {showAddFacilityModal && pendingFacilityLocation && (
+        <AddFacilityModal
+          lat={pendingFacilityLocation.lat}
+          lng={pendingFacilityLocation.lng}
+          existingCount={facilities.length}
+          onConfirm={(data) => handleAddFacility(pendingFacilityLocation, data)}
+          onCancel={() => { setShowAddFacilityModal(false); setPendingFacilityLocation(null); setDrawMode('none'); }}
+        />
+      )}
     </div>
   );
 }
