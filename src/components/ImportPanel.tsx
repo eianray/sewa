@@ -64,22 +64,17 @@ function identifyGeometry(fc: FeatureCollection): "nodes" | "pipes" | "basins" {
   return "basins";
 }
 
-function shpReady() { return typeof window !== "undefined" && !!((window as unknown) as Record<string, unknown>)["shp"] && !!((window as unknown) as Record<string, unknown>)["JSZip"]; }
+function shpReady() { return typeof window !== "undefined" && !!((window as unknown) as Record<string, unknown>)["shp"]; }
 
 async function loadShp(): Promise<void> {
   if (shpReady()) return;
   await new Promise<void>((resolve, reject) => {
-    const s1 = document.createElement("script");
-    s1.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
-    s1.onload = () => {
-      const s2 = document.createElement("script");
-      s2.src = "https://cdnjs.cloudflare.com/ajax/libs/shpjs/4.0.0/shp.js";
-      s2.onload = () => resolve();
-      s2.onerror = () => reject(new Error("Failed to load shp.js"));
-      document.head.appendChild(s2);
-    };
-    s1.onerror = () => reject(new Error("Failed to load JSZip"));
-    document.head.appendChild(s1);
+    // shpjs 3.6.3 bundles its own JSZip; shp(buffer) → FeatureCollection
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/shpjs/3.6.3/shp.min.js";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Failed to load shp.js"));
+    document.head.appendChild(s);
   });
 }
 
@@ -94,10 +89,9 @@ async function parseShapefileZip(file: File): Promise<{ geojson: FeatureCollecti
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const win = window as any;
         const shpFn = win["shp"];
-        const JSZipClass = win["JSZip"];
-        if (!shpFn || !JSZipClass) return reject(new Error("shp.js or JSZip not loaded"));
-        const jszipInstance = new JSZipClass();
-        shpFn(buffer, jszipInstance).then((geojson: FeatureCollection) => {
+        if (!shpFn) return reject(new Error("shp.js not loaded"));
+        // shp(ArrayBuffer) → Promise<FeatureCollection> for zip files
+        Promise.resolve(shpFn(buffer)).then((geojson: FeatureCollection) => {
           const fields = new Set<string>();
           geojson.features.forEach((f) => {
             if (f.properties) Object.keys(f.properties).forEach((k) => fields.add(k));

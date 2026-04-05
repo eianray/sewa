@@ -31,7 +31,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">{children}
       {/* JSZip + shp.js for shapefile parsing in ImportPanel */}
       <Script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" strategy="afterInteractive" />
-      <Script src="https://cdnjs.cloudflare.com/ajax/libs/shpjs/4.0.0/shp.js" strategy="afterInteractive" />
+      <Script src="https://cdnjs.cloudflare.com/ajax/libs/shpjs/3.6.3/shp.min.js" strategy="afterInteractive" />
       </body>
     </html>
   );
