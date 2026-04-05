@@ -96,6 +96,46 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
+  // Clear-layer event listeners (dispatched by ElementPalette ⋯ menu)
+  useEffect(() => {
+    if (!session) return;
+    const userId = session.user.id;
+
+    const clearNodes = async () => {
+      const { error } = await supabase
+        .from("network_nodes")
+        .delete()
+        .eq("project_id", projectId)
+        .eq("user_id", userId);
+      if (!error) { setNodes([]); markUnsaved(); }
+    };
+    const clearPipes = async () => {
+      const { error } = await supabase
+        .from("network_pipes")
+        .delete()
+        .eq("project_id", projectId)
+        .eq("user_id", userId);
+      if (!error) { setPipes([]); markUnsaved(); }
+    };
+    const clearFacilities = async () => {
+      const { error } = await supabase
+        .from("network_facilities")
+        .delete()
+        .eq("project_id", projectId)
+        .eq("user_id", userId);
+      if (!error) { setFacilities([]); markUnsaved(); }
+    };
+
+    window.addEventListener("sewa:clear-layer:nodes", clearNodes);
+    window.addEventListener("sewa:clear-layer:pipes", clearPipes);
+    window.addEventListener("sewa:clear-layer:facilities", clearFacilities);
+    return () => {
+      window.removeEventListener("sewa:clear-layer:nodes", clearNodes);
+      window.removeEventListener("sewa:clear-layer:pipes", clearPipes);
+      window.removeEventListener("sewa:clear-layer:facilities", clearFacilities);
+    };
+  }, [session, projectId, supabase]);
+
   async function fetchData(userId: string) {
     setLoading(true);
     const [{ data: proj }, { data: nodeData }, { data: pipeData }, { data: facilityData }] = await Promise.all([
@@ -476,11 +516,12 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
           onNodeTypeToAdd={setNodeTypeToAdd}
           onLayerVisibilityChange={setLayerVisibility}
           onBasemapChange={setBasemap}
-          onImportNodes={handleImportNodes}
-          onImportPipes={handleImportPipes}
+          onAppendNodes={handleImportNodes}
+          onAppendPipes={handleImportPipes}
           onImportBoundary={handleImportBoundary}
           onClearBoundary={handleClearBoundary}
-          onImportFacilities={handleImportFacilities}
+          onAppendFacilities={handleImportFacilities}
+          pipes={pipes}
           projectId={projectId}
         />
         <div className="flex-1 relative">

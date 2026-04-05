@@ -991,10 +991,11 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
           onNodeTypeToAdd={setNodeTypeToAdd}
           onLayerVisibilityChange={setLayerVisibility}
           onBasemapChange={setBasemap}
-          onImportNodes={handleImportNodes}
-          onImportPipes={handleImportPipes}
+          onAppendNodes={handleImportNodes}
+          onAppendPipes={handleImportPipes}
           onImportBoundary={handleImportBoundary}
           onClearBoundary={handleClearBoundary}
+          pipes={pipes}
           projectId={projectId}
         />
 
