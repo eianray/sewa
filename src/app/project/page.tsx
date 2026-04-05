@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase";
 import type { Project } from "@/types/project";
-import type { NetworkNode, NetworkPipe, NodeType, DrawMode, BasemapType, LayerVisibility } from "@/types/network";
+import type { NetworkNode, NetworkPipe, NodeType, PipeType, DrawMode, BasemapType, LayerVisibility } from "@/types/network";
 import type { Facility } from "@/types/facility";
 import { FACILITY_TYPE_LABELS } from "@/types/facility";
 import type { SimulationResult } from "@/lib/simulation";
@@ -57,6 +57,7 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
   const [savedTimer, setSavedTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [drawMode, setDrawMode] = useState<DrawMode>("none");
   const [nodeTypeToAdd, setNodeTypeToAdd] = useState<NodeType | null>(null);
+  const [pipeTypeToAdd, setPipeTypeToAdd] = useState<PipeType>("gravity");
   const [layerVisibility, setLayerVisibility] = useState<LayerVisibility>({
     nodes: true,
     pipes: true,
@@ -181,7 +182,7 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
         return;
       }
     },
-    [session, drawMode, nodeTypeToAdd, projectId]
+    [session, drawMode, nodeTypeToAdd, pipeTypeToAdd, projectId]
   );
 
   const handleNodeClick = useCallback(
@@ -192,7 +193,7 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
         } else if (pipeFirstNodeId !== node.id && session) {
           const { data, error } = await supabase
             .from("network_pipes")
-            .insert({ project_id: projectId, user_id: session.user.id, from_node_id: pipeFirstNodeId, to_node_id: node.id, diameter_in: 8, material: "PVC" })
+            .insert({ project_id: projectId, user_id: session.user.id, from_node_id: pipeFirstNodeId, to_node_id: node.id, diameter_in: 8, material: "PVC", pipe_type: pipeTypeToAdd })
             .select()
             .single();
           if (!error && data) setPipes((prev) => [...prev, data as NetworkPipe]);
@@ -251,7 +252,7 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
         const fromId = labelToId.get(p.from_node_label ?? "");
         const toId = labelToId.get(p.to_node_label ?? "");
         if (!fromId || !toId) { skipped.push(p.label); return null; }
-        return { ...p, user_id: userId, from_node_id: fromId, to_node_id: toId };
+        return { ...p, user_id: userId, from_node_id: fromId, to_node_id: toId, pipe_type: p.pipe_type ?? "gravity" };
       })
       .filter(Boolean) as NetworkPipe[];
     if (skipped.length) console.warn("[SEWA] handleImportPipes skipped:", skipped.join(", "));
@@ -507,13 +508,14 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
       {/* Body */}
       <div className="flex flex-1 overflow-hidden">
         <ElementPalette
-          drawMode={drawMode} nodeTypeToAdd={nodeTypeToAdd}
+          drawMode={drawMode} nodeTypeToAdd={nodeTypeToAdd} pipeTypeToAdd={pipeTypeToAdd}
           layerVisibility={layerVisibility} basemap={basemap}
           boundaryLabel={boundaryLabel}
           nodes={nodes}
           facilities={facilities}
           onDrawModeChange={(mode) => { setDrawMode(mode); if (mode !== 'pipe') setPipeFirstNodeId(null); }}
           onNodeTypeToAdd={setNodeTypeToAdd}
+          onPipeTypeToAdd={setPipeTypeToAdd}
           onLayerVisibilityChange={setLayerVisibility}
           onBasemapChange={setBasemap}
           onAppendNodes={handleImportNodes}

@@ -17,6 +17,7 @@ export interface NetworkNode {
 }
 
 export type PipeMaterial = "PVC" | "RCP" | "HDPE" | "DI";
+export type PipeType = "gravity" | "force_main";
 
 export interface NetworkPipe {
   id: string;
@@ -29,6 +30,7 @@ export interface NetworkPipe {
   length_ft: number | null;
   slope_pct: number | null;
   material: PipeMaterial;
+  pipe_type: PipeType;
   properties: Record<string, unknown>;
   created_at: string;
 }

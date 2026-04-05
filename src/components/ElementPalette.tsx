@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { DrawMode, NodeType, BasemapType, LayerVisibility } from "@/types/network";
+import { DrawMode, NodeType, PipeType, BasemapType, LayerVisibility } from "@/types/network";
 import type { FeatureCollection } from "geojson";
 import type { NetworkNode, NetworkPipe } from "@/types/network";
 import type { Facility } from "@/types/facility";
@@ -77,6 +77,7 @@ const LAYER_META: Record<LayerKey, { label: string; color: string }> = {
 interface ElementPaletteProps {
   drawMode: DrawMode;
   nodeTypeToAdd: NodeType | null;
+  pipeTypeToAdd: PipeType;
   layerVisibility: LayerVisibility;
   basemap: BasemapType;
   boundaryLabel: string | null;
@@ -85,6 +86,7 @@ interface ElementPaletteProps {
   facilities?: Facility[];
   onDrawModeChange: (mode: DrawMode) => void;
   onNodeTypeToAdd: (type: NodeType | null) => void;
+  onPipeTypeToAdd: (type: PipeType) => void;
   onLayerVisibilityChange: (layers: LayerVisibility) => void;
   onBasemapChange: (basemap: BasemapType) => void;
   /** Append node records (partial — handleImportNodes adds db fields) */
@@ -107,6 +109,11 @@ const NODE_TYPE_LABELS: Record<NodeType, string> = {
   lift_station: "Lift Station",
 };
 
+const PIPE_TYPE_LABELS: Record<PipeType, string> = {
+  gravity:    "Gravity",
+  force_main: "Force Main",
+};
+
 const BASEMAP_OPTIONS: { value: BasemapType; label: string; group: string }[] = [
   { value: "street",             label: "OSM Street",        group: "OpenStreetMap" },
   { value: "topo",              label: "OSM Topo",          group: "OpenStreetMap" },
@@ -124,6 +131,7 @@ const BASEMAP_OPTIONS: { value: BasemapType; label: string; group: string }[] = 
 export default function ElementPalette({
   drawMode,
   nodeTypeToAdd,
+  pipeTypeToAdd,
   layerVisibility,
   basemap,
   boundaryLabel,
@@ -132,6 +140,7 @@ export default function ElementPalette({
   facilities,
   onDrawModeChange,
   onNodeTypeToAdd,
+  onPipeTypeToAdd,
   onLayerVisibilityChange,
   onBasemapChange,
   onAppendNodes,
@@ -266,6 +275,7 @@ export default function ElementPalette({
             length_ft: mapping.length_ft ? Number(rec[mapping.length_ft]) ?? null : null,
             slope_pct: mapping.slope_pct ? Number(rec[mapping.slope_pct]) ?? null : null,
             material: (mapping.material ? String(rec[mapping.material] ?? "PVC") : "PVC") as NetworkPipe["material"],
+            pipe_type: "gravity" as PipeType,
             properties: {},
             created_at: "",
           });
@@ -324,6 +334,65 @@ export default function ElementPalette({
 
   return (
     <aside className="w-52 flex flex-col bg-[#0d1117] border-l border-[#1e293b] h-full overflow-y-auto">
+
+      {/* ── Draw Tools ──────────────────────────────────────────────────── */}
+      <div className="p-4 border-b border-[#1e293b]">
+        <h3 className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">
+          Add Node
+        </h3>
+        <div className="grid grid-cols-2 gap-1 mb-3">
+          {(Object.keys(NODE_TYPE_LABELS) as NodeType[]).map((nt) => {
+            const active = drawMode === "node" && nodeTypeToAdd === nt;
+            return (
+              <button
+                key={nt}
+                onClick={() => {
+                  if (active) {
+                    onDrawModeChange("none");
+                    onNodeTypeToAdd(null);
+                  } else {
+                    onNodeTypeToAdd(nt);
+                    onDrawModeChange("node");
+                  }
+                }}
+                className={"text-xs rounded px-2 py-1.5 text-left transition-colors truncate " +
+                  (active
+                    ? "bg-[#38bdf8] text-[#0d1117] font-semibold"
+                    : "bg-[#1e293b] text-[#e2e8f0] hover:bg-[#334155]")}
+                title={NODE_TYPE_LABELS[nt]}
+              >
+                {NODE_TYPE_LABELS[nt]}
+              </button>
+            );
+          })}
+        </div>
+
+        <h3 className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider mb-2">
+          Draw Pipe
+        </h3>
+        <div className="grid grid-cols-2 gap-1 mb-1">
+          {(Object.keys(PIPE_TYPE_LABELS) as PipeType[]).map((pt) => {
+            const active = drawMode === "pipe" && pipeTypeToAdd === pt;
+            return (
+              <button
+                key={pt}
+                onClick={() => {
+                  onPipeTypeToAdd(pt);
+                  if (drawMode !== "pipe") onDrawModeChange("pipe");
+                  else if (active) onDrawModeChange("none");
+                }}
+                className={"text-xs rounded px-2 py-1.5 text-left transition-colors truncate " +
+                  (active
+                    ? "bg-[#a78bfa] text-[#0d1117] font-semibold"
+                    : "bg-[#1e293b] text-[#e2e8f0] hover:bg-[#334155]")}
+                title={PIPE_TYPE_LABELS[pt]}
+              >
+                {PIPE_TYPE_LABELS[pt]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {/* ── Layers ─────────────────────────────────────────────────────── */}
       <div className="p-4 flex-1">

@@ -983,12 +983,14 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
         <ElementPalette
           drawMode={drawMode}
           nodeTypeToAdd={nodeTypeToAdd}
+          pipeTypeToAdd="gravity"
           layerVisibility={layerVisibility}
           basemap={basemap}
           boundaryLabel={boundaryLabel}
           nodes={nodes}
           onDrawModeChange={setDrawMode}
           onNodeTypeToAdd={setNodeTypeToAdd}
+          onPipeTypeToAdd={() => {}}
           onLayerVisibilityChange={setLayerVisibility}
           onBasemapChange={setBasemap}
           onAppendNodes={handleImportNodes}

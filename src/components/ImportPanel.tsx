@@ -338,6 +338,7 @@ export default function ImportPanel({
             length_ft: pipeMapping.length_ft ? parseFloat(f.properties?.[pipeMapping.length_ft] ?? "0") : 0,
             slope_pct: pipeMapping.slope_pct ? parseFloat(f.properties?.[pipeMapping.slope_pct] ?? "0") : 0,
             material: (f.properties?.[pipeMapping.material ?? ""] as NetworkPipe["material"]) ?? "PVC",
+            pipe_type: "gravity" as import("@/types/network").PipeType,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             properties: {} as any,
             created_at: now,
