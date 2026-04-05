@@ -28,6 +28,7 @@ interface MapCanvasProps {
   onPipeClick: (pipe: NetworkPipe, e: L.LeafletMouseEvent) => void;
   onFacilityClick?: (facility: Facility, e: L.LeafletMouseEvent) => void;
   onMapReady?: (map: L.Map) => void;
+  onBasemapChange: (b: BasemapType) => void;
 }
 
 const BASEMAP_TILES: Record<BasemapType, string> = {
@@ -113,6 +114,7 @@ export default function MapCanvas({
   onPipeClick,
   onFacilityClick,
   onMapReady,
+  onBasemapChange,
 }: MapCanvasProps) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -410,11 +412,47 @@ export default function MapCanvas({
     }
   }, [boundaryGeoJSON, layerVisibility.basins]);
 
+  const BASEMAP_GROUPS = [
+    { group: "OpenStreetMap", options: [
+      { value: "street",           label: "OSM Street" },
+      { value: "topo",             label: "OSM Topo" },
+    ]},
+    { group: "Esri", options: [
+      { value: "satellite",        label: "Satellite" },
+      { value: "esri_topo",        label: "Esri Topo" },
+      { value: "esri_terrain",     label: "Esri Terrain" },
+      { value: "esri_natgeo",      label: "NatGeo" },
+      { value: "esri_street",      label: "Esri Street" },
+    ]},
+    { group: "USGS", options: [
+      { value: "usgs_imagery",     label: "USGS Imagery" },
+      { value: "usgs_topo",        label: "USGS Topo" },
+    ]},
+    { group: "Stamen", options: [
+      { value: "stamen_terrain",   label: "Terrain" },
+      { value: "stamen_watercolor",label: "Watercolor" },
+    ]},
+  ];
+
   return (
-    <div
-      ref={mapContainerRef}
-      className="w-full h-full"
-      style={{ background: "#0a0f1e" }}
-    />
+    <div className="w-full h-full relative" style={{ background: "#0a0f1e" }}>
+      <div ref={mapContainerRef} className="w-full h-full" />
+      {/* Basemap control — bottom-left, above attribution */}
+      <div className="absolute bottom-7 left-2 z-[1000] pointer-events-auto">
+        <select
+          value={basemap}
+          onChange={(e) => onBasemapChange(e.target.value as BasemapType)}
+          className="text-xs rounded px-2 py-1 bg-[#0d1117]/90 text-[#e2e8f0] border border-[#334155] focus:outline-none cursor-pointer shadow-lg backdrop-blur"
+        >
+          {BASEMAP_GROUPS.map(({ group, options }) => (
+            <optgroup key={group} label={group}>
+              {options.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </div>
+    </div>
   );
 }

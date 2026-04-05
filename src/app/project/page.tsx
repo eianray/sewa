@@ -538,6 +538,7 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
             onNodeClick={handleNodeClick}
             onPipeClick={handlePipeClick}
             onFacilityClick={handleFacilityClick}
+            onBasemapChange={setBasemap}
             onMapReady={(map) => { mapRef.current = map; }}
           />
           {drawMode === 'pipe' && pipeFirstNodeId && (

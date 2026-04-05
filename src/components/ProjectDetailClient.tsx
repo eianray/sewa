@@ -1035,6 +1035,7 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
             pipeFromNodeId={pipeFromNodeId}
             onNodeClick={handleNodeClick}
             onPipeClick={handlePipeClick}
+            onBasemapChange={setBasemap}
             onMapReady={(map) => {
               // Store the Leaflet map instance so zoom buttons can access it
               mapRef.current = map;

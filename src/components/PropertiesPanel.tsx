@@ -60,7 +60,22 @@ export default function PropertiesPanel({
     return <FacilityPanel facility={selectedFacility} onUpdate={onUpdateFacility} onDelete={onDeleteFacility} onClose={onClose} />;
   }
 
-  if (!selected || !selectedType) return null;
+  if (!selected || !selectedType) {
+    return (
+      <div className="w-80 flex-shrink-0 bg-[#0d1117] border-l border-[#1e293b] h-full flex flex-col">
+        <div className="p-4 border-b border-[#1e293b]">
+          <h3 className="text-xs font-semibold text-[#94a3b8] uppercase tracking-wider">Properties</h3>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-[#475569] px-6 text-center">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="16" cy="16" r="12" />
+            <path d="M16 11v6M16 21v1" strokeLinecap="round" />
+          </svg>
+          <p className="text-xs">Select a node, pipe, or facility on the map to view and edit its properties.</p>
+        </div>
+      </div>
+    );
+  }
 
   const isNode = selectedType === "node";
   const node = selected as NetworkNode;

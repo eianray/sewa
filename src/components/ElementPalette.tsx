@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { DrawMode, NodeType, PipeType, BasemapType, LayerVisibility } from "@/types/network";
+import { DrawMode, NodeType, PipeType, BasemapType, LayerVisibility, NODE_COLORS } from "@/types/network";
 import type { FeatureCollection } from "geojson";
 import type { NetworkNode, NetworkPipe } from "@/types/network";
 import type { Facility } from "@/types/facility";
@@ -79,7 +79,7 @@ interface ElementPaletteProps {
   nodeTypeToAdd: NodeType | null;
   pipeTypeToAdd: PipeType;
   layerVisibility: LayerVisibility;
-  basemap: BasemapType;
+  basemap?: BasemapType;
   boundaryLabel: string | null;
   nodes: NetworkNode[];
   pipes: NetworkPipe[];
@@ -88,7 +88,7 @@ interface ElementPaletteProps {
   onNodeTypeToAdd: (type: NodeType | null) => void;
   onPipeTypeToAdd: (type: PipeType) => void;
   onLayerVisibilityChange: (layers: LayerVisibility) => void;
-  onBasemapChange: (basemap: BasemapType) => void;
+  onBasemapChange?: (basemap: BasemapType) => void;
   /** Append node records (partial — handleImportNodes adds db fields) */
   onAppendNodes: (nodes: NetworkNode[]) => void;
   /** Append pipe records (partial) */
@@ -114,6 +114,12 @@ const PIPE_TYPE_LABELS: Record<PipeType, string> = {
   force_main: "Force Main",
 };
 
+const PIPE_TYPE_COLORS: Record<PipeType, string> = {
+  gravity:    "#60a5fa", // blue — open-channel gravity flow
+  force_main: "#f97316", // orange — pressurized force main
+};
+
+// BASEMAP_OPTIONS kept for reference but basemap control moved to MapCanvas overlay
 const BASEMAP_OPTIONS: { value: BasemapType; label: string; group: string }[] = [
   { value: "street",             label: "OSM Street",        group: "OpenStreetMap" },
   { value: "topo",              label: "OSM Topo",          group: "OpenStreetMap" },
@@ -355,9 +361,10 @@ export default function ElementPalette({
                     onDrawModeChange("node");
                   }
                 }}
-                className={"text-xs rounded px-2 py-1.5 text-left transition-colors truncate " +
+                style={active ? { backgroundColor: NODE_COLORS[nt], color: "#0d1117" } : { borderLeft: "3px solid " + NODE_COLORS[nt] }}
+                className={"text-xs rounded px-2 py-1.5 text-left transition-colors truncate border border-transparent " +
                   (active
-                    ? "bg-[#38bdf8] text-[#0d1117] font-semibold"
+                    ? "font-semibold"
                     : "bg-[#1e293b] text-[#e2e8f0] hover:bg-[#334155]")}
                 title={NODE_TYPE_LABELS[nt]}
               >
@@ -381,9 +388,10 @@ export default function ElementPalette({
                   if (drawMode !== "pipe") onDrawModeChange("pipe");
                   else if (active) onDrawModeChange("none");
                 }}
-                className={"text-xs rounded px-2 py-1.5 text-left transition-colors truncate " +
+                style={active ? { backgroundColor: PIPE_TYPE_COLORS[pt], color: "#0d1117" } : { borderLeft: "3px solid " + PIPE_TYPE_COLORS[pt] }}
+                className={"text-xs rounded px-2 py-1.5 text-left transition-colors truncate border border-transparent " +
                   (active
-                    ? "bg-[#a78bfa] text-[#0d1117] font-semibold"
+                    ? "font-semibold"
                     : "bg-[#1e293b] text-[#e2e8f0] hover:bg-[#334155]")}
                 title={PIPE_TYPE_LABELS[pt]}
               >
@@ -419,7 +427,7 @@ export default function ElementPalette({
                 >
                   <span
                     className={"w-4 h-4 rounded border inline-flex items-center justify-center transition-colors " +
-                      (isOn ? "border-[" + meta.color + "] bg-[" + meta.color + "]" : "border-[#475569]")
+                      (isOn ? "border-[#38bdf8] bg-[#38bdf8]" : "border-[#475569]")
                     }
                   >
                     {isOn && (
@@ -431,7 +439,7 @@ export default function ElementPalette({
                 </button>
 
                 {/* Label + count */}
-                <span className="flex-1 truncate" style={{ color: isOn ? meta.color : undefined }}>
+                <span className="flex-1 truncate">
                   {meta.label}
                 </span>
                 {count > 0 && (
@@ -498,23 +506,6 @@ export default function ElementPalette({
           })}
         </div>
 
-        {/* Basemap */}
-        <div className="pt-4">
-          <p className="text-xs text-[#94a3b8] mb-2">Basemap</p>
-          <select
-            value={basemap}
-            onChange={(e) => onBasemapChange(e.target.value as BasemapType)}
-            className="w-full rounded px-2 py-1.5 text-xs font-medium bg-[#111827] text-[#e2e8f0] border border-[#1e293b] focus:outline-none focus:border-[#38bdf8] cursor-pointer"
-          >
-            {["OpenStreetMap", "Esri", "USGS", "Stamen"].map((group) => (
-              <optgroup key={group} label={group}>
-                {BASEMAP_OPTIONS.filter((o) => o.group === group).map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        </div>
       </div>
 
       {/* Draw mode banner */}
