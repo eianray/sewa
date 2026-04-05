@@ -153,8 +153,21 @@ export default function ElementPalette({
         </h3>
         <div className="space-y-2">
           {/* Layer toggles */}
-          {(["nodes", "pipes"] as const).map((layer) => {
+          {(["nodes", "pipes", "basins", "facilities"] as const).map((layer) => {
             const isOn = layerVisibility[layer];
+            const colors: Record<typeof layer, string> = {
+              nodes: "#38bdf8",
+              pipes: "#f97316",
+              basins: "#22c55e",
+              facilities: "#a855f7",
+            };
+            const labels: Record<typeof layer, string> = {
+              nodes: "Nodes",
+              pipes: "Pipes",
+              basins: "Basins",
+              facilities: "Facilities",
+            };
+            const color = colors[layer];
             return (
               <button
                 key={layer}
@@ -163,13 +176,13 @@ export default function ElementPalette({
                 }
                 className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all ${
                   isOn
-                    ? "bg-[#38bdf8]/10 text-[#38bdf8]"
+                    ? `bg-[${color}]/10 text-[${color}]`
                     : "bg-[#111827] text-[#94a3b8] hover:text-white"
                 }`}
               >
                 <span
                   className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${
-                    isOn ? "bg-[#38bdf8] border-[#38bdf8]" : "border-[#475569]"
+                    isOn ? `bg-[${color}] border-[${color}]` : "border-[#475569]"
                   }`}
                 >
                   {isOn && (
@@ -178,7 +191,7 @@ export default function ElementPalette({
                     </svg>
                   )}
                 </span>
-                <span className="capitalize">{layer}</span>
+                <span>{labels[layer]}</span>
               </button>
             );
           })}

@@ -60,6 +60,8 @@ export function ProjectDetailClient({ projectId }: ProjectDetailClientProps) {
   const [layerVisibility, setLayerVisibility] = useState<LayerVisibility>({
     nodes: true,
     pipes: true,
+    basins: true,
+    facilities: true,
   });
   const [basemap, setBasemap] = useState<BasemapType>("street");
   const [selectedId, setSelectedId] = useState<string | null>(null);

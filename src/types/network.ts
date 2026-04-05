@@ -52,6 +52,8 @@ export type BasemapType =
 export interface LayerVisibility {
   nodes: boolean;
   pipes: boolean;
+  basins: boolean;
+  facilities: boolean;
 }
 
 export const NODE_COLORS: Record<NodeType, string> = {

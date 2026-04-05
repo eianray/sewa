@@ -369,10 +369,13 @@ export default function MapCanvas({
         line.remove();
       }
     });
-    return () => {
+    if (layerVisibility.facilities) {
+      facilityMarkersRef.current.forEach((m) => {
+        if (!m.getElement()?.parentNode) m.addTo(mapRef.current!);
+      });
+    } else {
       facilityMarkersRef.current.forEach((m) => m.remove());
-      facilityMarkersRef.current.clear();
-    };
+    }
   }, [layerVisibility]);
 
   // Render boundary polygon
@@ -384,10 +387,10 @@ export default function MapCanvas({
       boundaryLayerRef.current.remove();
       boundaryLayerRef.current = null;
     }
-    if (boundaryGeoJSON) {
+    if (boundaryGeoJSON && layerVisibility.basins) {
       const layer = L.geoJSON(boundaryGeoJSON, {
         style: {
-          color: "#a78bfa",
+          color: "#22c55e",
           weight: 2,
           fillOpacity: 0.06,
           dashArray: "6 4",
@@ -395,17 +398,17 @@ export default function MapCanvas({
       }).addTo(map);
       boundaryLayerRef.current = layer;
     }
-  }, [boundaryGeoJSON]);
+  }, [boundaryGeoJSON, layerVisibility.basins]);
 
   // Auto-fit map to boundary when it first appears
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !boundaryGeoJSON) return;
+    if (!map || !boundaryGeoJSON || !layerVisibility.basins) return;
     const layer = boundaryLayerRef.current;
     if (layer) {
       map.fitBounds(layer.getBounds(), { padding: [40, 40] });
     }
-  }, [boundaryGeoJSON]);
+  }, [boundaryGeoJSON, layerVisibility.basins]);
 
   return (
     <div

@@ -116,10 +116,12 @@ export default function ProjectDetailClient({ projectId }: ProjectDetailClientPr
    */
   const [nodeTypeToAdd, setNodeTypeToAdd] = useState<NodeType | null>(null);
 
-  /** Visibility toggles for each map layer (nodes, pipes). */
+  /** Visibility toggles for each map layer (nodes, pipes, basins, facilities). */
   const [layerVisibility, setLayerVisibility] = useState<LayerVisibility>({
     nodes: true,
     pipes: true,
+    basins: true,
+    facilities: true,
   });
 
   /** Active base map tile set: "street" | "satellite" | "terrain" */

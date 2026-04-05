@@ -44,6 +44,11 @@ interface FacilityFieldMapping {
   allocated_mgd?: string;
 }
 
+interface BasinFieldMapping {
+  label?: string;
+  area_acres?: string;
+}
+
 interface ParseResult {
   type: "nodes" | "pipes" | "basins";
   geojson: FeatureCollection;
@@ -124,6 +129,14 @@ function guessMapping(fields: string[]): FieldMapping {
     material: val("material") ?? val("mat"),
     from_node_label: val("from") ?? val("from_node"),
     to_node_label: val("to") ?? val("to_node"),
+  };
+}
+
+function guessBasinMapping(fields: string[]): BasinFieldMapping {
+  const val = (pat: string) => fields.find((s) => s.toLowerCase().replace(/[_\s-]/g, "").includes(pat));
+  return {
+    label: val("name") ?? val("basin") ?? val("label") ?? fields[0] ?? "",
+    area_acres: val("area") ?? val("acres") ?? val("sqft") ?? val("area_acres") ?? "",
   };
 }
 
@@ -238,6 +251,8 @@ export default function ImportPanel({
 
   // ── Boundary / Basins ─────────────────────────────────────────────────────
   const [basinFile, setBasinFile] = useState<File | null>(null);
+  const [basinFields, setBasinFields] = useState<string[]>([]);
+  const [basinMapping, setBasinMapping] = useState<BasinFieldMapping>({});
   const [basinName, setBasinName] = useState("");
 
   // ── Facilities ─────────────────────────────────────────────────────────────
@@ -248,6 +263,8 @@ export default function ImportPanel({
   // ── Field change helpers ───────────────────────────────────────────────────
   const setMap = (setter: React.Dispatch<React.SetStateAction<FieldMapping>>, key: keyof FieldMapping, v: string) =>
     setter((prev) => ({ ...prev, [key]: v }));
+  const setBasinMap = (key: keyof BasinFieldMapping, v: string) =>
+    setBasinMapping((prev) => ({ ...prev, [key]: v }));
   const setFacilityMap = (key: keyof FacilityFieldMapping, v: string) =>
     setFacilityMapping((prev) => ({ ...prev, [key]: v }));
 
@@ -260,22 +277,7 @@ export default function ImportPanel({
       setError(null);
       setUploading(true);
       try {
-        // Facilities can be GeoJSON (.json) or shapefile (.zip)
-        if (type === 'facilities' && file.name.endsWith('.json')) {
-          const text = await file.text();
-          const geojson = JSON.parse(text) as FeatureCollection;
-          const fields = new Set<string>();
-          geojson.features.forEach((f) => {
-            if (f.properties) Object.keys(f.properties).forEach((k) => fields.add(k));
-          });
-          const fieldArr = Array.from(fields).sort();
-          setFacilityFile(file);
-          setFacilityFields(fieldArr);
-          setFacilityMapping(guessFacilityMapping(fieldArr));
-          setUploading(false);
-          return;
-        }
-        if (!file.name.endsWith('.zip')) { setError('Please upload a .zip shapefile or .json GeoJSON file.'); setUploading(false); return; }
+        if (!file.name.endsWith('.zip')) { setError('Please upload a .zip shapefile.'); setUploading(false); return; }
         const { geojson, fields } = await parseShapefileZip(file);
         const guess = guessMapping(fields);
         if (type === 'nodes') { setNodeFile(file); setNodeFields(fields); setNodeMapping(guess); }
@@ -286,7 +288,7 @@ export default function ImportPanel({
           setFacilityFields(fieldArr);
           setFacilityMapping(guessFacilityMapping(fieldArr));
         }
-        else { setBasinFile(file); }
+        else { setBasinFile(file); setBasinFields(fields); setBasinMapping(guessBasinMapping(fields)); }
       } catch (err) {
         setError(`Parse error: ${err instanceof Error ? err.message : String(err)}`);
       } finally { setUploading(false); }
@@ -351,10 +353,17 @@ export default function ImportPanel({
       }
       // Basins / Boundary
       if (basinFile) {
-        const { geojson } = await parseShapefileZip(basinFile);
-        const label = basinName.trim() || `Basin ${Date.now()}`;
-        onImportBoundary(geojson, label);
-        setBasinFile(null); setBasinName("");
+        const { geojson, fields } = await parseShapefileZip(basinFile);
+        // If no basinMapping yet, auto-detect from fields
+        if (!basinMapping.label && fields.length) {
+          setBasinFields(fields);
+          setBasinMapping(guessBasinMapping(fields));
+        }
+        const mappedLabel = basinMapping.label && basinMapping.label !== ''
+          ? (geojson.features[0]?.properties?.[basinMapping.label] ?? basinName.trim())
+          : basinName.trim() || `Basin ${Date.now()}`;
+        onImportBoundary(geojson, mappedLabel);
+        setBasinFile(null); setBasinFields([]); setBasinMapping({}); setBasinName("");
       }
       // Facilities
       if (facilityFile) {
@@ -428,7 +437,7 @@ export default function ImportPanel({
     } catch (err) {
       setError(`Upload error: ${err instanceof Error ? err.message : String(err)}`);
     } finally { setUploading(false); }
-  }, [nodeFile, nodeMapping, nodeName, pipeFile, pipeMapping, pipeName, basinFile, basinName, facilityFile, facilityMapping, projectId, onImportNodes, onImportPipes, onImportFacilities, onImportBoundary]);
+  }, [nodeFile, nodeMapping, nodeName, pipeFile, pipeMapping, pipeName, basinFile, basinName, basinMapping, facilityFile, facilityMapping, projectId, onImportNodes, onImportPipes, onImportFacilities, onImportBoundary]);
 
   return (
     <div className="border-b border-[#1e293b] p-3 space-y-2">
@@ -543,7 +552,13 @@ export default function ImportPanel({
             accept=".zip"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) { setBasinFile(file); setBasinName(file.name.replace(/\.zip$/i, "")); }
+              if (!file) return;
+              setBasinFile(file);
+              setBasinName(file.name.replace(/\.zip$/i, ""));
+              parseShapefileZip(file).then(({ fields }) => {
+                setBasinFields(fields);
+                setBasinMapping(guessBasinMapping(fields));
+              }).catch((err) => setError(`Could not read shapefile: ${err instanceof Error ? err.message : String(err)}`));
             }}
             className="hidden"
             id="basin-upload"
@@ -555,11 +570,18 @@ export default function ImportPanel({
         </div>
         <input
           type="text"
-          placeholder="Basin name (optional)"
+          placeholder="Basin name (fallback if no field mapped)"
           value={basinName}
           onChange={(e) => setBasinName(e.target.value)}
           className="w-full rounded px-2 py-1 text-xs bg-[#111827] text-[#e2e8f0] border border-[#1e293b] focus:outline-none focus:border-[#22c55e] mb-2"
         />
+        {basinFields.length > 0 && (
+          <div className="space-y-1 mb-2">
+            <p className="text-xs text-[#94a3b8] font-medium">Map fields:</p>
+            <FieldSelect label="Label" value={basinMapping.label ?? ""} fields={basinFields} onChange={(v) => setBasinMap("label", v)} />
+            <FieldSelect label="Area Acres" value={basinMapping.area_acres ?? ""} fields={basinFields} onChange={(v) => setBasinMap("area_acres", v)} />
+          </div>
+        )}
         <button
           onClick={handleUpload}
           disabled={uploading || !basinFile}
@@ -586,35 +608,21 @@ export default function ImportPanel({
         >
           <input
             type="file"
-            accept=".zip,.json"
+            accept=".zip"
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (!file) return;
-              if (file.name.endsWith('.json')) {
-                file.text().then((text) => {
-                  try {
-                    const geojson = JSON.parse(text) as FeatureCollection;
-                    const fields = Array.from(new Set(geojson.features.flatMap((f) => f.properties ? Object.keys(f.properties) : []))).sort();
-                    setFacilityFile(file);
-                    setFacilityFields(fields);
-                    setFacilityMapping(guessFacilityMapping(fields));
-                  } catch {
-                    setError('Invalid GeoJSON file');
-                  }
-                }).catch(() => setError('Could not read file'));
-              } else {
+              parseShapefileZip(file).then(({ fields }) => {
                 setFacilityFile(file);
-                parseShapefileZip(file).then(({ fields }) => {
-                  setFacilityFields(fields.sort());
-                  setFacilityMapping(guessFacilityMapping(fields));
-                }).catch((e) => { setError(`Could not read shapefile: ${e instanceof Error ? e.message : String(e)}`); setFacilityFile(null); });
-              }
+                setFacilityFields(fields);
+                setFacilityMapping(guessFacilityMapping(fields));
+              }).catch((e) => setError(`Could not read shapefile: ${e instanceof Error ? e.message : String(e)}`));
             }}
             className="hidden"
             id="facility-upload"
           />
           <label htmlFor="facility-upload" className="cursor-pointer">
-            <div className="text-xs text-[#94a3b8] mb-1">Drop .shp zip or .json GeoJSON</div>
+            <div className="text-xs text-[#94a3b8] mb-1">Drop .shp zip (shapefile) or click</div>
             {facilityFile && <div className="text-xs text-[#a855f7] font-medium truncate">{facilityFile.name}</div>}
           </label>
         </div>
