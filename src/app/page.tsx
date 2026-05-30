@@ -6,7 +6,6 @@ import { supabase } from "@/lib/supabase";
 export default function Home() {
   const [session, setSession] = useState<string | null>(null);
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -35,14 +34,13 @@ export default function Home() {
     e.preventDefault();
     setLoading(true);
     setMessage(null);
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithOtp({
       email,
-      password,
     });
     if (error) {
       setMessage(`Error: ${error.message}`);
     } else {
-      window.location.href = "/dashboard";
+      setMessage("Check your email for the magic link!");
     }
     setLoading(false);
   };
@@ -54,8 +52,8 @@ export default function Home() {
       {/* Top bar */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-[#1e293b]">
         <div className="flex items-center gap-3">
-          <span className="text-[#38bdf8] font-bold text-lg">SEWA</span>
-          <span className="text-[#475569] text-sm">Sewer &amp; Water Analysis</span>
+          <span className="text-[#38bdf8] font-bold text-lg">AquaFlow</span>
+          <span className="text-[#475569] text-sm">Water Distribution Analysis</span>
         </div>
       </header>
 
@@ -63,9 +61,9 @@ export default function Home() {
       <main className="flex-1 flex items-center justify-center">
         <div className="w-full max-w-sm p-8 space-y-6">
           <div className="text-center">
-            <h1 className="text-xl font-bold text-white">Sign in to SEWA</h1>
+            <h1 className="text-xl font-bold text-white">Get Started with AquaFlow</h1>
             <p className="text-[#94a3b8] text-sm mt-1">
-              Enter your credentials to access your account
+              Enter your email to receive a magic link
             </p>
           </div>
 
@@ -78,21 +76,12 @@ export default function Home() {
               required
               className="w-full px-4 py-3 rounded-lg bg-[#111827] border border-[#1e293b] text-white placeholder-[#475569] focus:outline-none focus:border-[#38bdf8]"
             />
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
-              required
-              minLength={6}
-              className="w-full px-4 py-3 rounded-lg bg-[#111827] border border-[#1e293b] text-white placeholder-[#475569] focus:outline-none focus:border-[#38bdf8]"
-            />
             <button
               type="submit"
               disabled={loading}
               className="w-full py-3 px-4 rounded-lg bg-[#38bdf8] text-[#0a0f1e] font-semibold hover:bg-[#0ea5e9] transition-colors disabled:opacity-50"
             >
-              {loading ? "Signing in..." : "Sign In"}
+              {loading ? "Sending magic link..." : "Get Started"}
             </button>
           </form>
 

@@ -1,0 +1,30 @@
+{
+  "name": "Net1 — EPA Example Network 1",
+  "description": "Simple water distribution network from EPA / OpenWaterAnalytics. Used for solver validation and interface testing.",
+  "crs": "EPSG:2249",
+  "createdAt": "2026-05-30",
+  "layers": {
+    "pipes": {
+      "source": "pipes.geojson",
+      "featureCount": 12
+    },
+    "junctions": {
+      "source": "junctions.geojson",
+      "featureCount": 11
+    }
+  },
+  "nodes": {
+    "total": 11,
+    "junctions": 9,
+    "reservoirs": 1,
+    "tanks": 1,
+    "pumps": 0,
+    "hydrants": 0
+  },
+  "pipes": {
+    "total": 12,
+    "materials": ["PVC"],
+    "diameterRange": [6, 18],
+    "lengthRange": [200, 10530]
+  }
+}

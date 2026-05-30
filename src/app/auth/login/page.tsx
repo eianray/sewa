@@ -32,8 +32,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#0a0f1e] text-white">
       <div className="w-full max-w-md p-8 space-y-6">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-[#38bdf8]">SEWA</h1>
-          <p className="text-[#94a3b8] mt-2">Sewer &amp; Water Analysis</p>
+          <h1 className="text-2xl font-bold text-[#38bdf8]">AquaFlow</h1>
+          <p className="text-[#94a3b8] mt-2">Water Distribution Analysis</p>
         </div>
 
         <form onSubmit={handleMagicLink} className="space-y-4">

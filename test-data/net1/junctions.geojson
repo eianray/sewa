@@ -1,0 +1,17 @@
+{
+  "type": "FeatureCollection",
+  "crs": { "type": "name", "properties": { "name": "EPSG:2249" } },
+  "features": [
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [20, 70] }, "properties": { "node_id": "10", "x": 20, "y": 70, "elevation": 710, "demand_gpm": 0, "node_type": "junction", "population_served": null, "per_capita_demand_gpd": null } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [30, 70] }, "properties": { "node_id": "11", "x": 30, "y": 70, "elevation": 710, "demand_gpm": 150, "node_type": "junction", "population_served": null, "per_capita_demand_gpd": null } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [50, 70] }, "properties": { "node_id": "12", "x": 50, "y": 70, "elevation": 700, "demand_gpm": 150, "node_type": "junction", "population_served": null, "per_capita_demand_gpd": null } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [70, 70] }, "properties": { "node_id": "13", "x": 70, "y": 70, "elevation": 695, "demand_gpm": 100, "node_type": "junction", "population_served": null, "per_capita_demand_gpd": null } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [30, 40] }, "properties": { "node_id": "21", "x": 30, "y": 40, "elevation": 700, "demand_gpm": 150, "node_type": "junction", "population_served": null, "per_capita_demand_gpd": null } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [50, 40] }, "properties": { "node_id": "22", "x": 50, "y": 40, "elevation": 695, "demand_gpm": 200, "node_type": "junction", "population_served": null, "per_capita_demand_gpd": null } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [70, 40] }, "properties": { "node_id": "23", "x": 70, "y": 40, "elevation": 690, "demand_gpm": 0, "node_type": "junction", "population_served": null, "per_capita_demand_gpd": null } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [30, 10] }, "properties": { "node_id": "31", "x": 30, "y": 10, "elevation": 700, "demand_gpm": 100, "node_type": "junction", "population_served": null, "per_capita_demand_gpd": null } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [50, 10] }, "properties": { "node_id": "32", "x": 50, "y": 10, "elevation": 710, "demand_gpm": 100, "node_type": "junction", "population_served": null, "per_capita_demand_gpd": null } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [10, 70] }, "properties": { "node_id": "9", "x": 10, "y": 70, "elevation": 800, "demand_gpm": 0, "node_type": "reservoir", "population_served": null, "per_capita_demand_gpd": null } },
+    { "type": "Feature", "geometry": { "type": "Point", "coordinates": [50, 90] }, "properties": { "node_id": "2", "x": 50, "y": 90, "elevation": 850, "demand_gpm": 0, "node_type": "tank", "population_served": null, "per_capita_demand_gpd": null, "min_elevation": 100, "max_elevation": 150, "diameter_or_area": 50.5 } }
+  ]
+}

@@ -3,30 +3,25 @@
 import { useEffect, useRef, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-// leaflet-draw removed — pipe drawing uses two-node-click flow in ProjectDetailClient
-import type { FeatureCollection } from "geojson";
 import type { NetworkNode, NetworkPipe, NodeType, DrawMode, BasemapType, LayerVisibility } from "@/types/network";
 import { NODE_COLORS } from "@/types/network";
-import type { Facility } from "@/types/facility";
 
 interface MapCanvasProps {
-  nodes: NetworkNode[];
+  junctions: NetworkNode[];
+  tanks: NetworkNode[];
+  reservoirs: NetworkNode[];
   pipes: NetworkPipe[];
-  facilities?: Facility[];
   drawMode: DrawMode;
   nodeTypeToAdd: NodeType | null;
   selectedId: string | null;
-  selectedType?: "node" | "pipe" | "facility" | null;
+  selectedType?: "node" | "pipe" | null;
   layerVisibility: LayerVisibility;
   basemap: BasemapType;
-  /** M4: GeoJSON FeatureCollection to render as the project boundary polygon. */
-  boundaryGeoJSON?: FeatureCollection | null;
   onMapClick: (lat: number, lng: number) => void;
   /** ID of the first node selected in pipe-draw mode, for highlight rendering. */
   pipeFromNodeId?: string | null;
   onNodeClick: (node: NetworkNode, e: L.LeafletMouseEvent) => void;
   onPipeClick: (pipe: NetworkPipe, e: L.LeafletMouseEvent) => void;
-  onFacilityClick?: (facility: Facility, e: L.LeafletMouseEvent) => void;
   onMapReady?: (map: L.Map) => void;
   onBasemapChange: (b: BasemapType) => void;
 }
@@ -67,20 +62,6 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 });
 
-function createFacilityIcon(facility: Facility, isSelected: boolean): L.DivIcon {
-  const color = isSelected ? '#F97316' : '#3B82F6';
-  const size = isSelected ? 20 : 16;
-  const shadow = isSelected
-    ? '0 0 0 3px rgba(249,115,22,0.4), 0 0 10px rgba(249,115,22,0.4)'
-    : '0 0 6px rgba(0,0,0,0.5)';
-  return L.divIcon({
-    className: '',
-    html: `<div style="width:${size}px;height:${size}px;background:${color};border:2px solid rgba(255,255,255,0.8);border-radius:4px;box-shadow:${shadow};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;line-height:1;">🏭</div>`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-  });
-}
-
 function createNodeIcon(type: NodeType, isSelected: boolean, isPipeFrom: boolean): L.DivIcon {
   const color = NODE_COLORS[type];
   const size = isSelected ? 20 : 16;
@@ -98,49 +79,44 @@ function createNodeIcon(type: NodeType, isSelected: boolean, isPipeFrom: boolean
 }
 
 export default function MapCanvas({
-  nodes,
+  junctions,
+  tanks,
+  reservoirs,
   pipes,
-  facilities = [],
   drawMode,
   nodeTypeToAdd,
   selectedId,
   selectedType,
   layerVisibility,
   basemap,
-  boundaryGeoJSON,
   onMapClick,
   pipeFromNodeId,
   onNodeClick,
   onPipeClick,
-  onFacilityClick,
   onMapReady,
   onBasemapChange,
 }: MapCanvasProps) {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const nodeMarkersRef = useRef<Map<string, L.Marker>>(new Map());
+  const junctionMarkersRef = useRef<Map<string, L.Marker>>(new Map());
+  const tankMarkersRef = useRef<Map<string, L.Marker>>(new Map());
+  const reservoirMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const pipeLinesRef = useRef<Map<string, L.Polyline>>(new Map());
-  const facilityMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const tileLayerRef = useRef<L.TileLayer | null>(null);
-  const boundaryLayerRef = useRef<L.GeoJSON | null>(null);
-
 
   // Mutable refs so Leaflet event handlers always call the latest callbacks
   // and always see the latest state without stale closures.
   const onMapClickRef = useRef(onMapClick);
   const onNodeClickRef = useRef(onNodeClick);
   const onPipeClickRef = useRef(onPipeClick);
-  const onFacilityClickRef = useRef(onFacilityClick);
   const drawModeRef = useRef(drawMode);
-  const nodesRef = useRef(nodes);
-  const facilitiesRef = useRef(facilities);
+  const allNodesRef = useRef<NetworkNode[]>([]);
+
   useEffect(() => { onMapClickRef.current = onMapClick; }, [onMapClick]);
   useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
   useEffect(() => { onPipeClickRef.current = onPipeClick; }, [onPipeClick]);
-  useEffect(() => { onFacilityClickRef.current = onFacilityClick; }, [onFacilityClick]);
   useEffect(() => { drawModeRef.current = drawMode; }, [drawMode]);
-  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
-  useEffect(() => { facilitiesRef.current = facilities; }, [facilities]);
+  useEffect(() => { allNodesRef.current = [...junctions, ...tanks, ...reservoirs]; }, [junctions, tanks, reservoirs]);
 
   // Initialize map
   useEffect(() => {
@@ -170,8 +146,8 @@ export default function MapCanvas({
         const clickPt = map.latLngToLayerPoint(e.latlng);
         let nearest: NetworkNode | null = null;
         let nearestDist = Infinity;
-        nodesRef.current.forEach((node) => {
-          const nodePt = map.latLngToLayerPoint(L.latLng(node.lat, node.lng));
+        allNodesRef.current.forEach((node) => {
+          const nodePt = map.latLngToLayerPoint(L.latLng(node.y, node.x));
           const dist = clickPt.distanceTo(nodePt);
           if (dist < nearestDist) { nearestDist = dist; nearest = node; }
         });
@@ -200,7 +176,7 @@ export default function MapCanvas({
     const map = mapRef.current;
     if (!map) return;
     const container = map.getContainer();
-    if (drawMode === 'pipe' || drawMode === 'node' || drawMode === 'facility') {
+    if (drawMode === 'pipe' || drawMode === 'node') {
       container.classList.add('leaflet-crosshair');
     } else {
       container.classList.remove('leaflet-crosshair');
@@ -225,45 +201,125 @@ export default function MapCanvas({
     tileLayerRef.current = newTileLayer;
   }, [basemap]);
 
-  // Render nodes
+  // Render junctions
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
 
-    const currentIds = new Set(nodes.map((n) => n.id));
+    const currentIds = new Set(junctions.map((n) => n.id));
 
-    nodeMarkersRef.current.forEach((marker, id) => {
+    junctionMarkersRef.current.forEach((marker, id) => {
       if (!currentIds.has(id)) {
         marker.remove();
-        nodeMarkersRef.current.delete(id);
+        junctionMarkersRef.current.delete(id);
       }
     });
 
-    nodes.forEach((node) => {
+    junctions.forEach((node) => {
       const isSelected = selectedType === "node" && selectedId === node.id;
       const isPipeFrom = pipeFromNodeId === node.id;
       const icon = createNodeIcon(node.type, isSelected, isPipeFrom);
 
-      if (nodeMarkersRef.current.has(node.id)) {
-        const marker = nodeMarkersRef.current.get(node.id)!;
+      if (junctionMarkersRef.current.has(node.id)) {
+        const marker = junctionMarkersRef.current.get(node.id)!;
         marker.setIcon(icon);
         marker.setTooltipContent(node.label || node.type);
       } else {
-        const marker = L.marker([node.lat, node.lng], { icon })
+        const marker = L.marker([node.y, node.x], { icon })
           .addTo(map)
           .bindTooltip(node.label || node.type, {
             permanent: false,
             direction: "top",
-            className: "sewa-tooltip",
+            className: "map-tooltip",
           });
         marker.on("click", (e: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(e);
           onNodeClickRef.current(node, e);
         });
-        nodeMarkersRef.current.set(node.id, marker);
+        junctionMarkersRef.current.set(node.id, marker);
       }
     });
-  }, [nodes, selectedId, selectedType, pipeFromNodeId]);
+  }, [junctions, selectedId, selectedType, pipeFromNodeId]);
+
+  // Render tanks
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const currentIds = new Set(tanks.map((n) => n.id));
+
+    tankMarkersRef.current.forEach((marker, id) => {
+      if (!currentIds.has(id)) {
+        marker.remove();
+        tankMarkersRef.current.delete(id);
+      }
+    });
+
+    tanks.forEach((node) => {
+      const isSelected = selectedType === "node" && selectedId === node.id;
+      const isPipeFrom = pipeFromNodeId === node.id;
+      const icon = createNodeIcon(node.type, isSelected, isPipeFrom);
+
+      if (tankMarkersRef.current.has(node.id)) {
+        const marker = tankMarkersRef.current.get(node.id)!;
+        marker.setIcon(icon);
+        marker.setTooltipContent(node.label || node.type);
+      } else {
+        const marker = L.marker([node.y, node.x], { icon })
+          .addTo(map)
+          .bindTooltip(node.label || node.type, {
+            permanent: false,
+            direction: "top",
+            className: "map-tooltip",
+          });
+        marker.on("click", (e: L.LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(e);
+          onNodeClickRef.current(node, e);
+        });
+        tankMarkersRef.current.set(node.id, marker);
+      }
+    });
+  }, [tanks, selectedId, selectedType, pipeFromNodeId]);
+
+  // Render reservoirs
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const currentIds = new Set(reservoirs.map((n) => n.id));
+
+    reservoirMarkersRef.current.forEach((marker, id) => {
+      if (!currentIds.has(id)) {
+        marker.remove();
+        reservoirMarkersRef.current.delete(id);
+      }
+    });
+
+    reservoirs.forEach((node) => {
+      const isSelected = selectedType === "node" && selectedId === node.id;
+      const isPipeFrom = pipeFromNodeId === node.id;
+      const icon = createNodeIcon(node.type, isSelected, isPipeFrom);
+
+      if (reservoirMarkersRef.current.has(node.id)) {
+        const marker = reservoirMarkersRef.current.get(node.id)!;
+        marker.setIcon(icon);
+        marker.setTooltipContent(node.label || node.type);
+      } else {
+        const marker = L.marker([node.y, node.x], { icon })
+          .addTo(map)
+          .bindTooltip(node.label || node.type, {
+            permanent: false,
+            direction: "top",
+            className: "map-tooltip",
+          });
+        marker.on("click", (e: L.LeafletMouseEvent) => {
+          L.DomEvent.stopPropagation(e);
+          onNodeClickRef.current(node, e);
+        });
+        reservoirMarkersRef.current.set(node.id, marker);
+      }
+    });
+  }, [reservoirs, selectedId, selectedType, pipeFromNodeId]);
 
   // Render pipes
   useEffect(() => {
@@ -279,7 +335,8 @@ export default function MapCanvas({
       }
     });
 
-    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+    const allNodes = [...junctions, ...tanks, ...reservoirs];
+    const nodeMap = new Map(allNodes.map((n) => [n.id, n]));
 
     pipes.forEach((pipe) => {
       const fromNode = pipe.from_node_id ? nodeMap.get(pipe.from_node_id) : null;
@@ -291,8 +348,8 @@ export default function MapCanvas({
       const weight = isSelected ? 5 : 3;
 
       const latLngs: L.LatLngExpression[] = [
-        [fromNode.lat, fromNode.lng],
-        [toNode.lat, toNode.lng],
+        [fromNode.y, fromNode.x],
+        [toNode.y, toNode.x],
       ];
 
       if (pipeLinesRef.current.has(pipe.id)) {
@@ -305,7 +362,7 @@ export default function MapCanvas({
           .bindTooltip(pipe.label || `${pipe.diameter_in}" ${pipe.material}`, {
             permanent: false,
             direction: "center",
-            className: "sewa-tooltip",
+            className: "map-tooltip",
           });
         line.on("click", (e: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(e);
@@ -314,103 +371,43 @@ export default function MapCanvas({
         pipeLinesRef.current.set(pipe.id, line);
       }
     });
-  }, [pipes, nodes, selectedId, selectedType, onPipeClick]);
-
-  // Render facilities
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    const currentIds = new Set(facilities.map((f) => f.id));
-
-    facilityMarkersRef.current.forEach((marker, id) => {
-      if (!currentIds.has(id)) {
-        marker.remove();
-        facilityMarkersRef.current.delete(id);
-      }
-    });
-
-    facilities.forEach((facility) => {
-      const isSelected = selectedType === 'facility' && selectedId === facility.id;
-      const icon = createFacilityIcon(facility, isSelected);
-
-      if (facilityMarkersRef.current.has(facility.id)) {
-        const marker = facilityMarkersRef.current.get(facility.id)!;
-        marker.setIcon(icon);
-        marker.setTooltipContent(facility.name || facility.facility_id);
-      } else {
-        const marker = L.marker([facility.lat, facility.lng], { icon })
-          .addTo(map)
-          .bindTooltip(facility.name || facility.facility_id, {
-            permanent: false,
-            direction: 'top',
-            className: 'sewa-tooltip',
-          });
-        marker.on('click', (e: L.LeafletMouseEvent) => {
-          L.DomEvent.stopPropagation(e);
-          onFacilityClickRef.current?.(facility, e);
-        });
-        facilityMarkersRef.current.set(facility.id, marker);
-      }
-    });
-  }, [facilities, selectedId, selectedType]);
+  }, [pipes, junctions, tanks, reservoirs, selectedId, selectedType, onPipeClick]);
 
   // Toggle layer visibility
   useEffect(() => {
-    nodeMarkersRef.current.forEach((marker) => {
-      if (layerVisibility.nodes) {
+    // Junctions
+    if (layerVisibility.junctions) {
+      junctionMarkersRef.current.forEach((marker) => {
         if (!marker.getElement()?.parentNode) marker.addTo(mapRef.current!);
-      } else {
-        marker.remove();
-      }
-    });
-    pipeLinesRef.current.forEach((line) => {
-      if (layerVisibility.pipes) {
-        if (!line.getElement()?.parentNode) line.addTo(mapRef.current!);
-      } else {
-        line.remove();
-      }
-    });
-    if (layerVisibility.facilities) {
-      facilityMarkersRef.current.forEach((m) => {
-        if (!m.getElement()?.parentNode) m.addTo(mapRef.current!);
       });
     } else {
-      facilityMarkersRef.current.forEach((m) => m.remove());
+      junctionMarkersRef.current.forEach((marker) => marker.remove());
+    }
+    // Tanks
+    if (layerVisibility.tanks) {
+      tankMarkersRef.current.forEach((marker) => {
+        if (!marker.getElement()?.parentNode) marker.addTo(mapRef.current!);
+      });
+    } else {
+      tankMarkersRef.current.forEach((marker) => marker.remove());
+    }
+    // Reservoirs
+    if (layerVisibility.reservoirs) {
+      reservoirMarkersRef.current.forEach((marker) => {
+        if (!marker.getElement()?.parentNode) marker.addTo(mapRef.current!);
+      });
+    } else {
+      reservoirMarkersRef.current.forEach((marker) => marker.remove());
+    }
+    // Pipes
+    if (layerVisibility.pipes) {
+      pipeLinesRef.current.forEach((line) => {
+        if (!line.getElement()?.parentNode) line.addTo(mapRef.current!);
+      });
+    } else {
+      pipeLinesRef.current.forEach((line) => line.remove());
     }
   }, [layerVisibility]);
-
-  // Render boundary polygon
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    if (boundaryLayerRef.current) {
-      boundaryLayerRef.current.remove();
-      boundaryLayerRef.current = null;
-    }
-    if (boundaryGeoJSON && layerVisibility.basins) {
-      const layer = L.geoJSON(boundaryGeoJSON, {
-        style: {
-          color: "#22c55e",
-          weight: 2,
-          fillOpacity: 0.06,
-          dashArray: "6 4",
-        },
-      }).addTo(map);
-      boundaryLayerRef.current = layer;
-    }
-  }, [boundaryGeoJSON, layerVisibility.basins]);
-
-  // Auto-fit map to boundary when it first appears
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !boundaryGeoJSON || !layerVisibility.basins) return;
-    const layer = boundaryLayerRef.current;
-    if (layer) {
-      map.fitBounds(layer.getBounds(), { padding: [40, 40] });
-    }
-  }, [boundaryGeoJSON, layerVisibility.basins]);
 
   const BASEMAP_GROUPS = [
     { group: "OpenStreetMap", options: [

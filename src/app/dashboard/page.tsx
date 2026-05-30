@@ -94,8 +94,8 @@ export default function Dashboard() {
       {/* Top bar */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-[#1e293b]">
         <div className="flex items-center gap-3">
-          <span className="text-[#38bdf8] font-bold text-lg tracking-wide">SEWA</span>
-          <span className="text-[#475569] text-sm hidden sm:inline">Sewer &amp; Water Analysis</span>
+          <span className="text-[#38bdf8] font-bold text-lg tracking-wide">AquaFlow</span>
+          <span className="text-[#475569] text-sm hidden sm:inline">Water Distribution Analysis</span>
         </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-[#94a3b8] hidden sm:block">{email}</span>
@@ -152,7 +152,7 @@ export default function Dashboard() {
               <div className="text-4xl mb-4">📋</div>
               <h3 className="text-lg font-semibold text-white mb-2">No projects yet</h3>
               <p className="text-[#94a3b8] text-sm mb-6">
-                Create your first project to start analyzing sewer and water systems.
+                Create your first project to start analyzing water distribution systems.
               </p>
               <button
                 onClick={() => setShowModal(true)}

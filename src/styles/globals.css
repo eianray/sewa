@@ -1,0 +1,79 @@
+/* AquaFlow Design System */
+:root {
+  /* Backgrounds */
+  --bg-base: #0a0f1e;
+  --bg-surface: rgba(15, 23, 42, 0.95);
+  --bg-glass: rgba(15, 23, 42, 0.8);
+  --bg-elevated: rgba(30, 41, 59, 0.9);
+
+  /* Accent */
+  --accent: #3b82f6;
+  --accent-hover: #60a5fa;
+  --accent-muted: rgba(59, 130, 246, 0.15);
+
+  /* Text */
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+
+  /* Borders */
+  --border: rgba(148, 163, 184, 0.1);
+  --border-strong: rgba(148, 163, 184, 0.2);
+
+  /* Pipe velocity colors */
+  --velocity-ok: #22c55e;
+  --velocity-warn: #eab308;
+  --velocity-crit: #ef4444;
+
+  /* Node pressure colors */
+  --pressure-ok: #3b82f6;
+  --pressure-warn: #f59e0b;
+  --pressure-low: #ef4444;
+  --pressure-high: #8b5cf6;
+
+  /* Shadows */
+  --shadow-glass: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-glass);
+}
+
+.glass-elevated {
+  background: var(--bg-elevated);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-elevated);
+}
+
+/* Pipe velocity classes */
+.pipe-velocity-ok { color: var(--velocity-ok); }
+.pipe-velocity-warn { color: var(--velocity-warn); }
+.pipe-velocity-crit { color: var(--velocity-crit); }
+
+/* Node pressure classes */
+.node-pressure-ok { color: var(--pressure-ok); }
+.node-pressure-warn { color: var(--pressure-warn); }
+.node-pressure-low { color: var(--pressure-low); }
+.node-pressure-high { color: var(--pressure-high); }

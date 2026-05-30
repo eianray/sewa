@@ -95,7 +95,7 @@ export function applyLidarElevations<T extends ElevationPatchableNode>(
     if (surfaceElevFt === null) {
       // DEM doesn't cover this location — keep the stored invert_elev
       console.warn(
-        `[SEWA] LIDAR: no DEM coverage at node ${node.id} ` +
+        `[AquaFlow] LIDAR: no DEM coverage at node ${node.id} ` +
         `(lat=${node.lat.toFixed(5)}, lng=${node.lng.toFixed(5)}) — ` +
         `falling back to attribute invert_elev=${node.invert_elev}`
       );
